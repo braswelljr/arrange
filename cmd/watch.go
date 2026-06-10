@@ -7,9 +7,9 @@ import (
 
 func newWatchCmd(opts *CmdOptions) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "watch <dir>",
+		Use:   "watch <directory>",
 		Short: "Watches the directory for changes",
-		Long:  "Watches a directory for [file] changes and automatically organizes the files in the directory",
+		Long:  "Watches a directory for <file> changes and automatically organizes the files in the directory",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dir := args[0]
@@ -28,9 +28,11 @@ func watchRun(opts *CmdOptions, dir string) error {
 	}
 	defer func() {
 		if err := watcher.Close(); err != nil {
-			opts.Log.Println("ERROR closing watcher:", err)
+			opts.Log.Errorf("closing watcher: %v", err)
 		}
 	}()
+
+	opts.Log.Infof("watching %s", dir)
 
 	errc := make(chan error, 1)
 	go func() {
@@ -41,7 +43,7 @@ func watchRun(opts *CmdOptions, dir string) error {
 					errc <- nil
 					return
 				}
-				opts.Log.Println("EVENT:", event)
+				opts.Log.Eventf("%s %s", event.Op, event.Name)
 				if event.Op == fsnotify.Create {
 					if err := runE(opts, dir, dir); err != nil {
 						errc <- err
@@ -53,7 +55,7 @@ func watchRun(opts *CmdOptions, dir string) error {
 					errc <- nil
 					return
 				}
-				opts.Log.Println("ERROR:", err)
+				opts.Log.Errorf("watcher: %v", err)
 			}
 		}
 	}()

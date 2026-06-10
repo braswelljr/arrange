@@ -1,13 +1,13 @@
 package cmd
 
 import (
-	"log"
 	"os"
 
 	"github.com/spf13/cobra"
 
 	"github.com/braswelljr/arrange/internal/common"
 	"github.com/braswelljr/arrange/internal/config"
+	"github.com/braswelljr/arrange/internal/logger"
 )
 
 type CmdOptions struct {
@@ -15,7 +15,7 @@ type CmdOptions struct {
 	StdOut *os.File
 
 	ConfigPath string
-	Log        *log.Logger
+	Log        *logger.Logger
 }
 
 func NewRootCmd(opts *CmdOptions) *cobra.Command {

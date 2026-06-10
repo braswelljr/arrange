@@ -15,7 +15,7 @@ import (
 func newRunCmd(opts *CmdOptions) *cobra.Command {
 	var exclude []string
 	cmd := &cobra.Command{
-		Use:   "run <src> [dest]",
+		Use:   "run <src> [destination]",
 		Short: "Scans and arranges files into folders according to their file types",
 		Args:  cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -52,7 +52,7 @@ func runE(opts *CmdOptions, srcDir, destDir string, exclude ...string) error {
 	}
 
 	if files.Len() <= 0 {
-		opts.Log.Println("INFO: No Files found")
+		opts.Log.Info("No files found")
 		return nil
 	}
 
@@ -76,7 +76,7 @@ func runE(opts *CmdOptions, srcDir, destDir string, exclude ...string) error {
 				newPath = fmt.Sprintf("%s-%d.%s", base, count, file.Ext)
 			}
 
-			opts.Log.Printf("INFO: move %s --> %s\n", file.Path, newPath)
+			opts.Log.Move(file.Path, newPath)
 			if err := fileops.Move(file.Path, newPath); err != nil {
 				return err
 			}

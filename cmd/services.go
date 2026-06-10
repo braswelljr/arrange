@@ -83,7 +83,7 @@ func newServiceCmd(opts *CmdOptions) *cobra.Command {
 				return err
 			}
 
-			opts.Log.Println(status)
+			opts.Log.Success(status)
 			return nil
 		},
 	}
@@ -103,7 +103,7 @@ func newServiceCmd(opts *CmdOptions) *cobra.Command {
 				return err
 			}
 
-			opts.Log.Println(status)
+			opts.Log.Success(status)
 			return nil
 		},
 	}
@@ -125,7 +125,7 @@ func newServiceCmd(opts *CmdOptions) *cobra.Command {
 				return err
 			}
 
-			opts.Log.Println(status)
+			opts.Log.Info(status)
 			return nil
 		},
 	}
@@ -147,7 +147,7 @@ func newServiceCmd(opts *CmdOptions) *cobra.Command {
 				return err
 			}
 
-			opts.Log.Println(status)
+			opts.Log.Info(status)
 			return nil
 		},
 	}
@@ -170,7 +170,7 @@ func newServiceCmd(opts *CmdOptions) *cobra.Command {
 				return err
 			}
 
-			opts.Log.Println(status)
+			opts.Log.Success(status)
 			return nil
 		},
 	}
