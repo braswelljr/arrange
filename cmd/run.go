@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -21,7 +19,6 @@ func newRunCmd(opts *CmdOptions) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			srcDir := args[0]
 			destDir := srcDir
-
 			if len(args) == 2 {
 				destDir = args[1]
 			}
@@ -35,10 +32,9 @@ func newRunCmd(opts *CmdOptions) *cobra.Command {
 }
 
 func runE(opts *CmdOptions, srcDir, destDir string, exclude ...string) error {
-	filesToExclude := make(map[string]int, len(exclude))
-
-	for i, f := range exclude {
-		filesToExclude[f] = i
+	skipNames := make(map[string]struct{}, len(exclude))
+	for _, name := range exclude {
+		skipNames[name] = struct{}{}
 	}
 
 	cfg, err := config.NewConfig(opts.ConfigPath)
@@ -46,68 +42,38 @@ func runE(opts *CmdOptions, srcDir, destDir string, exclude ...string) error {
 		return err
 	}
 
-	files, err := getFiles(srcDir)
+	files, err := fileops.ScanDir(srcDir)
 	if err != nil {
 		return err
 	}
 
-	if files.Len() <= 0 {
+	if files.Len() == 0 {
 		opts.Log.Info("No files found")
 		return nil
 	}
 
-	for _, file := range *files {
-		if _, exclude := filesToExclude[file.Name]; exclude || file.Size <= 0 {
+	for _, f := range *files {
+		if _, skip := skipNames[f.Name]; skip || f.Size == 0 {
 			continue
 		}
 
-		if folder, exclude := cfg.Get(file.Ext); !exclude {
-			folder := filepath.Join(destDir, folder)
-			if !fileops.DirExists(folder) {
-				err := os.MkdirAll(folder, os.ModePerm)
-				if err != nil {
-					return err
-				}
-			}
+		folder, exempt := cfg.Get(f.Ext)
+		if exempt {
+			continue
+		}
 
-			newPath := filepath.Join(folder, file.Name)
-			base := strings.TrimSuffix(newPath, "."+file.Ext)
-			for count := 1; fileops.FileExists(newPath); count++ {
-				newPath = fmt.Sprintf("%s-%d.%s", base, count, file.Ext)
-			}
+		destDir := filepath.Join(destDir, folder)
+		if err := fileops.EnsureDir(destDir); err != nil {
+			return err
+		}
 
-			opts.Log.Move(file.Path, newPath)
-			if err := fileops.Move(file.Path, newPath); err != nil {
-				return err
-			}
+		cleanStem := fileops.StripBrowserSuffix(strings.TrimSuffix(f.Name, "."+f.Ext))
+		newPath := fileops.SafeDestPath(destDir, cleanStem, f.Ext)
+
+		opts.Log.Move(f.Path, newPath)
+		if err := fileops.Move(f.Path, newPath); err != nil {
+			return err
 		}
 	}
 	return nil
-}
-
-func getFiles(dir string) (*fileops.SmartFiles, error) {
-	var files fileops.SmartFiles
-
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			info, err := entry.Info()
-			if err != nil {
-				return nil, err
-			}
-			name := entry.Name()
-			files = append(files, &fileops.SmartFile{
-				Name: name,
-				Path: filepath.Join(dir, name),
-				Ext:  strings.TrimLeft(filepath.Ext(name), "."),
-				Size: info.Size(),
-			})
-		}
-	}
-
-	return &files, nil
 }

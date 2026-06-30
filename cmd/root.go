@@ -27,6 +27,7 @@ func NewRootCmd(opts *CmdOptions) *cobra.Command {
 	cmd.PersistentFlags().StringVarP(&opts.ConfigPath, "config-path", "C", config.Path(), "Path to config file")
 
 	cmd.AddCommand(newRunCmd(opts))
+	cmd.AddCommand(newMediaCmd(opts))
 	cmd.AddCommand(newSetupCmd(opts))
 	cmd.AddCommand(newServiceCmd(opts))
 	cmd.AddCommand(newWatchCmd(opts))
