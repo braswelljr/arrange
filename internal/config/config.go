@@ -8,8 +8,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/mitchellh/go-homedir"
-
 	"github.com/braswelljr/arrange/internal/fileops"
 )
 
@@ -37,20 +35,6 @@ type FileExt struct {
 	Extensions  []string `json:"extensions"`
 	Folder      string   `json:"folder"`
 	ExemptFiles bool     `json:"exempt_files"`
-}
-
-// Path returns config file path
-func Path() string {
-	usrConfigHome := os.Getenv("XDG_CONFIG_HOME")
-	if usrConfigHome == "" {
-		usrConfigHome = os.Getenv("HOME")
-		if usrConfigHome == "" {
-			usrConfigHome, _ = homedir.Expand("~/.config")
-		} else {
-			usrConfigHome = filepath.Join(usrConfigHome, ".config")
-		}
-	}
-	return filepath.Join(usrConfigHome, "arrange", "config.json")
 }
 
 func NewConfig(path string) (*Config, error) {
@@ -102,10 +86,6 @@ func NewConfig(path string) (*Config, error) {
 		return nil, err
 	}
 
-	// ExcludedDirs: no backfill needed — the new default is intentionally
-	// empty, so old configs that still list app dirs keep their behaviour
-	// and new configs start with nothing excluded.
-
 	newCfg.Path = path
 
 	cfgMu.Lock()
@@ -139,9 +119,8 @@ func (c *Config) initCfgMap() {
 	})
 }
 
-// IsExcludedPath returns true if any path component matches an entry in
-// ExcludedDirs (case-insensitive). The default list is empty, so this only
-// triggers when the user adds entries to their config.
+// IsExcludedPath reports whether any path component matches an entry in
+// ExcludedDirs (case-insensitive).
 func (c *Config) IsExcludedPath(path string) bool {
 	c.initCfgMap()
 	for _, part := range strings.Split(filepath.Clean(path), string(filepath.Separator)) {
@@ -153,13 +132,7 @@ func (c *Config) IsExcludedPath(path string) bool {
 }
 
 // ExtSet returns a lowercase lookup map of every extension that belongs to
-// the named folder in the non-exempt file groups. Callers import the folder
-// name constants (e.g. config.FolderVideos) so no raw strings are needed.
-//
-// Example:
-//
-//	videos := cfg.ExtSet(config.FolderVideos)
-//	if videos["mkv"] { … }
+// the named folder across non-exempt file groups.
 func (c *Config) ExtSet(folder string) map[string]bool {
 	out := make(map[string]bool)
 	for _, kf := range c.KnownFiles {
@@ -172,18 +145,32 @@ func (c *Config) ExtSet(folder string) map[string]bool {
 	return out
 }
 
-// Get returns the folder as string and a boolean val indicating whether the
-// ext should be excluded or not.
+// DestFolders returns the lowercased set of all unique destination folder names
+// used by non-exempt file groups.  Useful for skipping already-organised
+// subdirectories during a recursive scan.
+func (c *Config) DestFolders() map[string]struct{} {
+	c.initCfgMap()
+	out := make(map[string]struct{})
+	for _, folder := range c.includedExts {
+		if folder != "" {
+			out[strings.ToLower(folder)] = struct{}{}
+		}
+	}
+	if c.UnknownFilesFolder != "" {
+		out[strings.ToLower(c.UnknownFilesFolder)] = struct{}{}
+	}
+	return out
+}
+
+// Get returns the destination folder and whether the extension is exempt.
 func (c *Config) Get(extension string) (string, bool) {
 	c.initCfgMap()
 
 	if folder, ok := c.exemptedExts[extension]; ok {
 		return folder, true
 	}
-
 	if folder, ok := c.includedExts[extension]; ok {
 		return folder, false
 	}
-
 	return c.UnknownFilesFolder, false
 }

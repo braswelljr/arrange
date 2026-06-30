@@ -5,8 +5,6 @@ go 1.25.0
 require (
 	github.com/fatih/color v1.19.0
 	github.com/fsnotify/fsnotify v1.10.1
-	github.com/mitchellh/go-homedir v1.1.0
-	github.com/natefinch/atomic v1.0.1
 	github.com/spf13/cobra v1.10.2
 	github.com/takama/daemon v1.0.0
 	golang.org/x/term v0.44.0

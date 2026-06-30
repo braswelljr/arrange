@@ -104,6 +104,52 @@ func TestDestName(t *testing.T) {
 	}
 }
 
+func TestDestName_SeasonPack(t *testing.T) {
+	m := MediaInfo{Type: TypeTVSeries, Title: "Silo", Season: 2, Ext: "mkv"}
+	got := m.DestName()
+	want := "Silo S02.mkv"
+	if got != want {
+		t.Errorf("DestName = %q, want %q", got, want)
+	}
+}
+
+func TestDestName_EpisodeOnly(t *testing.T) {
+	m := MediaInfo{Type: TypeTVSeries, Title: "Show", Episode: 5, Ext: "mp4"}
+	got := m.DestName()
+	want := "Show E05.mp4"
+	if got != want {
+		t.Errorf("DestName = %q, want %q", got, want)
+	}
+}
+
+func TestMediaInfo_String(t *testing.T) {
+	cases := []struct {
+		info MediaInfo
+		want string
+	}{
+		{
+			MediaInfo{Type: TypeTVSeries, Title: "Breaking Bad", Season: 1, Episode: 5},
+			"[Series] Breaking Bad S01E05",
+		},
+		{
+			MediaInfo{Type: TypeMovie, Title: "Inception", Year: 2010},
+			"[Movie] Inception (2010)",
+		},
+		{
+			MediaInfo{Type: TypeMoviePart, Title: "The Lord of the Rings", Year: 2001, Part: 2},
+			"[Movie/Part 2] The Lord of the Rings (2001)",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.want, func(t *testing.T) {
+			got := c.info.String()
+			if got != c.want {
+				t.Errorf("String() = %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
 func TestCreatorMatch(t *testing.T) {
 	creators := []string{"Tyler Perry", "Christopher Nolan"}
 

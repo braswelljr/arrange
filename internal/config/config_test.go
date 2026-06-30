@@ -120,6 +120,31 @@ func TestExtSet(t *testing.T) {
 
 // ── IsExcludedPath ────────────────────────────────────────────────────────────
 
+func TestDestFolders(t *testing.T) {
+	cfg := newTestConfig(t)
+
+	folders := cfg.DestFolders()
+
+	// All standard category folders should appear (lowercased).
+	required := []string{
+		"videos", "audio", "documents", "pictures",
+		"ebooks", "applications", "archive", "fonts",
+		"diskimages", "database", "subtitles", "design",
+		"3d models",
+		"other", // unknown files folder
+	}
+	for _, want := range required {
+		if _, ok := folders[want]; !ok {
+			t.Errorf("DestFolders missing %q", want)
+		}
+	}
+
+	// Empty string must never be a folder key.
+	if _, ok := folders[""]; ok {
+		t.Error("DestFolders contains empty string key")
+	}
+}
+
 func TestIsExcludedPath(t *testing.T) {
 	// Default config: nothing is excluded.
 	cfg := newTestConfig(t)

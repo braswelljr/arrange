@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -37,8 +38,9 @@ var (
 	errorStyle   = color.New(color.FgRed)
 )
 
-// Logger is a colored, terminal-aware logger.
+// Logger is a colored, terminal-aware, goroutine-safe logger.
 type Logger struct {
+	mu  sync.Mutex
 	out io.Writer
 	err io.Writer
 }
@@ -82,7 +84,9 @@ func truncate(s string, maxRunes int) string {
 
 // line prints a formatted log line: "  HH:MM:SS  LABEL  msg"
 func (l *Logger) line(w io.Writer, label, msg string) {
+	l.mu.Lock()
 	_, _ = fmt.Fprintf(w, "  %s  %s  %s\n", ts(), label, msg)
+	l.mu.Unlock()
 }
 
 // Info logs an informational message.
@@ -150,7 +154,10 @@ func (l *Logger) Move(src, destination string) {
 
 // Separator prints a full-width horizontal rule to stdout.
 func (l *Logger) Separator() {
-	_, _ = fmt.Fprintln(l.out, separator())
+	s := separator()
+	l.mu.Lock()
+	_, _ = fmt.Fprintln(l.out, s)
+	l.mu.Unlock()
 }
 
 // Header prints a styled banner with the app name and optional version.
@@ -165,14 +172,19 @@ func (l *Logger) Header(appName, version string) {
 	}
 	padding := strings.Repeat(" ", 2)
 
+	l.mu.Lock()
 	_, _ = fmt.Fprintf(l.out, "\n%s\n", sep)
 	_, _ = fmt.Fprintf(l.out, "%s%s%s\n", padding, title, ver)
 	_, _ = fmt.Fprintf(l.out, "%s\n\n", sep)
+	l.mu.Unlock()
 }
 
 // Footer prints a closing separator to stdout.
 func (l *Logger) Footer() {
-	_, _ = fmt.Fprintf(l.out, "\n%s\n\n", separator())
+	s := separator()
+	l.mu.Lock()
+	_, _ = fmt.Fprintf(l.out, "\n%s\n\n", s)
+	l.mu.Unlock()
 }
 
 // Println implements a log.Logger-compatible method (maps to Info).
@@ -182,5 +194,7 @@ func (l *Logger) Println(args ...any) {
 
 // Printf implements a log.Logger-compatible method (maps to Info).
 func (l *Logger) Printf(format string, args ...any) {
+	l.mu.Lock()
 	_, _ = fmt.Fprintf(l.out, format, args...)
+	l.mu.Unlock()
 }

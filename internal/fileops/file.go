@@ -32,8 +32,9 @@ func FileExists(path string) bool {
 }
 
 // EnsureDir creates dir and all parents if they do not already exist.
+// Directories are created with permission 0750 (owner rwx, group rx, others none).
 func EnsureDir(dir string) error {
-	return os.MkdirAll(dir, os.ModePerm)
+	return os.MkdirAll(dir, 0750)
 }
 
 // ScanDir reads the top level of dir and returns every non-directory entry.
@@ -62,4 +63,39 @@ func ScanDir(dir string) (*SmartFiles, error) {
 		})
 	}
 	return &files, nil
+}
+
+// WalkDir recursively collects every file under root.
+// skipDir is called with the base name of each subdirectory encountered;
+// returning true skips that entire subtree.  Unreadable entries are silently
+// ignored so a single permission error does not abort the whole walk.
+func WalkDir(root string, skipDir func(name string) bool) (*SmartFiles, error) {
+	var files SmartFiles
+	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil // skip unreadable entries
+		}
+		if d.IsDir() {
+			if path == root {
+				return nil // always descend into root itself
+			}
+			if skipDir != nil && skipDir(d.Name()) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil {
+			return nil
+		}
+		name := d.Name()
+		files = append(files, &SmartFile{
+			Name: name,
+			Path: path,
+			Ext:  strings.ToLower(strings.TrimLeft(filepath.Ext(name), ".")),
+			Size: info.Size(),
+		})
+		return nil
+	})
+	return &files, err
 }

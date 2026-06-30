@@ -69,6 +69,9 @@ func (m *MediaInfo) DestName() string {
 				ep += fmt.Sprintf("-E%02d", m.EpisodeEnd)
 			}
 			name = fmt.Sprintf("%s %s", m.Title, ep)
+		} else if m.Season > 0 {
+			// Season pack: no episode info available.
+			name = fmt.Sprintf("%s S%02d", m.Title, m.Season)
 		} else if m.Episode > 0 {
 			name = fmt.Sprintf("%s E%02d", m.Title, m.Episode)
 		}

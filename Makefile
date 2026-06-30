@@ -12,13 +12,24 @@ else
 endif
 
 .PHONY: all
-all: build
+all: build/all
 
 # ── Build ─────────────────────────────────────────────────────────────────────
 
-.PHONY: build
-build:
+.PHONY: build/darwin
+build/darwin:
 	go build $(LDFLAGS) -o $(BIN_DIR)/$(BINARY) .
+
+.PHONY: build/windows
+build/windows:
+	GOOS=windows GOARCH=amd64 go build $(LDFLAGS) -o $(BIN_DIR)/$(BINARY).exe .
+
+.PHONY: build/linux
+build/linux:
+	GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o $(BIN_DIR)/$(BINARY)-linux .
+
+.PHONY: build/all
+build/all: build/darwin build/windows build/linux
 
 .PHONY: install
 install:

@@ -106,7 +106,7 @@ func watchRun(opts *CmdOptions, dir string, recursive bool) error {
 			t.Stop()
 		}
 		timers[srcDir] = time.AfterFunc(debounceDelay, func() {
-			if err := runE(opts, srcDir, dir); err != nil {
+			if err := runE(opts, srcDir, dir, false); err != nil {
 				opts.Log.Errorf("organise %s → %s: %v", srcDir, dir, err)
 			}
 			timersMu.Lock()

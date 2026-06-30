@@ -1,28 +1,68 @@
-# This workflow will build a golang project
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
-
-name: Go
+name: Build
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-
   build:
+    name: Build / ${{ matrix.goos }}-${{ matrix.goarch }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.25.0'
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
 
-    - name: Build
-      run: go build -v ./...
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+        run: |
+          VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
+          EXT=""
+          if [ "$GOOS" = "windows" ]; then EXT=".exe"; fi
+          mkdir -p bin
+          go build \
+            -ldflags "-X github.com/braswelljr/arrange/internal/common.Version=${VERSION}" \
+            -o "bin/arrange-${GOOS}-${GOARCH}${EXT}" \
+            .
+          echo "Built bin/arrange-${GOOS}-${GOARCH}${EXT} (version=${VERSION})"
 
-    - name: Test
-      run: go test -v ./...
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: arrange-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: bin/arrange-*
+          if-no-files-found: error
+          retention-days: 7

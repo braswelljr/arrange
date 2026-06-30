@@ -37,6 +37,8 @@ It can run as a one-shot command, react to new files in real-time via a filesyst
 
 Requires [Go 1.25+](https://go.dev/dl/).
 
+**macOS / Linux**
+
 ```bash
 git clone https://github.com/braswelljr/arrange.git
 cd arrange
@@ -44,7 +46,16 @@ make build
 sudo mv ./bin/arrange /usr/local/bin/arrange
 ```
 
-Or install directly into `$GOPATH/bin`:
+**Windows** (PowerShell)
+
+```powershell
+git clone https://github.com/braswelljr/arrange.git
+cd arrange
+make build-windows          # produces bin/arrange.exe
+move bin\arrange.exe C:\Windows\System32\arrange.exe
+```
+
+Or install directly into `%GOPATH%\bin` on any platform:
 
 ```bash
 make install
@@ -89,22 +100,28 @@ arrange run <src> [dest]
 
 **Flags**
 
-| Flag        | Short | Description                               |
-|-------------|-------|-------------------------------------------|
-| `--exclude` | `-c`  | Comma-separated list of filenames to skip |
+| Flag          | Short | Description                                       |
+|---------------|-------|---------------------------------------------------|
+| `--exclude`   | `-c`  | Comma-separated list of filenames to skip         |
+| `--recursive` | `-r`  | Recursively scan all subdirectories               |
 
 **Behaviour notes**
 
-- Browser-generated duplicate suffixes (`file (1).pdf`, `file (2).pdf`) are stripped before moving - the destination is always `file.pdf`.
+- Video and audio files are organised into a clean hierarchy automatically — no flat `Videos/` dump. TV series go to `Videos/<Title>/Season XX/<Title> SxxExx [quality].ext`; movies go to `Videos/<Title> (YYYY)/<Title> (YYYY) [quality].ext`.
+- Browser-generated duplicate suffixes (`file (1).pdf`, `file (2).pdf`) are stripped before moving — the destination is always `file.pdf`.
 - If the destination filename already exists, a versioned suffix is appended: `file-v1.pdf`, `file-v2.pdf`, and so on.
 - In-progress downloads (`.crdownload`, `.part`, `.aria2`, `.!qb`, etc.) are never touched.
 - Torrent meta-files (`.torrent`) are never moved.
+- `--recursive` walks all subdirectories and organises every file found, skipping already-organised category folders (`Videos/`, `Documents/`, etc.) when the destination is the same as the source.
 
 **Examples**
 
 ```bash
 # Organize Downloads in-place
 arrange run ~/Downloads
+
+# Also recurse into nested folders (Telegram Desktop, etc.)
+arrange run --recursive ~/Downloads
 
 # Move files from Downloads into a separate folder
 arrange run ~/Downloads ~/Organized
@@ -294,14 +311,28 @@ systemctl --user status arrange
 
 ---
 
+### Windows (Task Scheduler)
+
+`arrange service` is not available on Windows. Use Task Scheduler instead:
+
+1. Open Task Scheduler (`Win+R` → `taskschd.msc`)
+2. **Create Basic Task** → trigger **"When I log on"**
+3. Action → **Start a Program**
+   - Program: `C:\path\to\arrange.exe`
+   - Arguments: `watch C:\Users\<you>\Downloads`
+4. Finish — arrange starts automatically on login.
+
+---
+
 ## Configuration
 
 The config file is created automatically on first run at:
 
-| Platform      | Path |
-| ------------- | ---- |
-| macOS / Linux | `~/.config/arrange/config.json` |
-| Custom        | Pass `--config-path <path>` to any command |
+| Platform      | Default path                                                   |
+| ------------- | -------------------------------------------------------------- |
+| macOS / Linux | `~/.config/arrange/config.json` (respects `$XDG_CONFIG_HOME`) |
+| Windows       | `%APPDATA%\arrange\config.json`                                |
+| Custom        | Pass `--config-path <path>` to any command                     |
 
 Full schema:
 

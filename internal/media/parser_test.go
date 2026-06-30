@@ -28,7 +28,7 @@ var parseCases = []struct {
 	{
 		name:  "resolution preferred over source tag",
 		input: "Game.of.Thrones.S08E06.1080p.BluRay.mkv",
-		want:  parseWant{title: "Game Of Thrones", typ: TypeTVSeries, season: 8, episode: 6, quality: "1080p"},
+		want:  parseWant{title: "Game of Thrones", typ: TypeTVSeries, season: 8, episode: 6, quality: "1080p"},
 	},
 	{
 		name:  "4K movie with year",
@@ -94,6 +94,59 @@ var parseCases = []struct {
 		name:  "space between S and E markers",
 		input: "Lost S03 E05.mkv",
 		want:  parseWant{title: "Lost", typ: TypeTVSeries, season: 3, episode: 5},
+	},
+	// ── Title case ────────────────────────────────────────────────────────────
+	{
+		name:  "UK abbreviation uppercased",
+		input: "Love.Island.Uk.S013E17.720p.YouthTrendx.mkv",
+		want:  parseWant{title: "Love Island UK", typ: TypeTVSeries, season: 13, episode: 17, quality: "720p"},
+	},
+	{
+		name:  "US abbreviation uppercased",
+		input: "Love.Island.Us.S08E21.1080p.YouthTrendx.mkv",
+		want:  parseWant{title: "Love Island US", typ: TypeTVSeries, season: 8, episode: 21, quality: "1080p"},
+	},
+	{
+		name:  "small word 'of' lowercased in the middle",
+		input: "Game.of.Thrones.S01E01.mkv",
+		want:  parseWant{title: "Game of Thrones", typ: TypeTVSeries, season: 1, episode: 1},
+	},
+	{
+		name:  "article 'the' stays capitalised at start",
+		input: "The.Boys.S01E01.mkv",
+		want:  parseWant{title: "The Boys", typ: TypeTVSeries, season: 1, episode: 1},
+	},
+	{
+		name:  "FBI abbreviation uppercased",
+		input: "Fbi.S04E01.WEB-DL.mkv",
+		want:  parseWant{title: "FBI", typ: TypeTVSeries, season: 4, episode: 1, quality: "WEB-DL"},
+	},
+	// ── Season packs and bare episode markers ────────────────────────────────
+	{
+		name:  "season pack S02 shorthand",
+		input: "Breaking.Bad.S02.Complete.720p.mkv",
+		want:  parseWant{title: "Breaking Bad", typ: TypeTVSeries, season: 2, quality: "720p"},
+	},
+	{
+		name:  "bare E episode marker (mini-series)",
+		input: "The.Office.E05.720p.mkv",
+		want:  parseWant{title: "The Office", typ: TypeTVSeries, episode: 5, quality: "720p"},
+	},
+	// ── HDR quality modifier ──────────────────────────────────────────────────
+	{
+		name:  "HDR modifier appended to resolution",
+		input: "Inception.2010.1080p.HDR.mkv",
+		want:  parseWant{title: "Inception", typ: TypeMovie, year: 2010, quality: "1080p HDR"},
+	},
+	{
+		name:  "HDR10+ modifier appended to 2160p",
+		input: "Dune.2021.2160p.HDR10+.BluRay.mkv",
+		want:  parseWant{title: "Dune", typ: TypeMovie, year: 2021, quality: "2160p HDR10+"},
+	},
+	{
+		name:  "DV (Dolby Vision) modifier appended",
+		input: "The.Batman.2022.2160p.DV.WEB-DL.mkv",
+		want:  parseWant{title: "The Batman", typ: TypeMovie, year: 2022, quality: "2160p DV"},
 	},
 }
 

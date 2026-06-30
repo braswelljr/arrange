@@ -1,0 +1,77 @@
+linters:
+  # Start from the default set and add extras.
+  # golangci-lint enables errcheck, govet, ineffassign, staticcheck, unused by default.
+  enable:
+    - misspell       # catch typos in strings and comments
+    - unconvert      # remove unnecessary type conversions
+    - revive         # idiomatic Go style (golint successor)
+    - gosimple       # suggest code simplifications
+    - gocritic       # opinionated but catches real issues
+
+  disable:
+    # funlen / cyclop / maintidx measure complexity but routinely flag
+    # legitimate switch statements in this codebase (parser, organiseFile).
+    - funlen
+    - cyclop
+    - maintidx
+    - gocognit
+
+linters-settings:
+  revive:
+    rules:
+      - name: exported
+        arguments:
+          # Require comments on all exported symbols.
+          - "checkPrivateReceivers"
+          - "sayRepetitiveInsteadOfStutters"
+      - name: error-return
+      - name: error-naming
+      - name: error-strings
+      - name: var-naming
+      - name: blank-imports
+
+  gocritic:
+    enabled-checks:
+      - appendAssign
+      - argOrder
+      - badCall
+      - commentedOutCode
+      - dupArg
+      - dupBranchBody
+      - emptyFallthrough
+      - exitAfterDefer
+      - nilValReturn
+      - sloppyLen
+      - stringXbytes
+      - unlabelStmt
+      - unnecessaryBlock
+
+  misspell:
+    locale: US
+
+issues:
+  # Don't fail on generated files.
+  exclude-dirs:
+    - vendor
+    - bin
+
+  exclude-rules:
+    # Test files: allow longer functions and t.Helper() without return checks.
+    - path: "_test\\.go"
+      linters:
+        - gocritic
+        - revive
+
+    # Intentional best-effort closes (defer _ = f.Close()) are fine.
+    - linters:
+        - errcheck
+      text: "Error return value of `.*\\.Close`"
+
+    # os.Remove in cleanup paths (partial file removal) is intentionally ignored
+    # via _ = os.Remove(...) already — don't double-flag it.
+    - linters:
+        - errcheck
+      text: "Error return value of `os\\.Remove`"
+
+run:
+  timeout: 5m

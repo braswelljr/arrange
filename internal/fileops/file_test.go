@@ -56,6 +56,60 @@ func TestEnsureDir(t *testing.T) {
 	}
 }
 
+func TestWalkDir(t *testing.T) {
+	root := t.TempDir()
+
+	// Layout:
+	//   root/a.txt
+	//   root/sub/b.mp4
+	//   root/sub/nested/c.pdf
+	//   root/skip/d.mkv   ← should be skipped
+	writeFile := func(path string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(path), 0750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("x"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeFile(filepath.Join(root, "a.txt"))
+	writeFile(filepath.Join(root, "sub", "b.mp4"))
+	writeFile(filepath.Join(root, "sub", "nested", "c.pdf"))
+	writeFile(filepath.Join(root, "skip", "d.mkv"))
+
+	files, err := WalkDir(root, func(name string) bool {
+		return name == "skip"
+	})
+	if err != nil {
+		t.Fatalf("WalkDir: %v", err)
+	}
+
+	if files.Len() != 3 {
+		t.Fatalf("got %d files, want 3", files.Len())
+	}
+
+	got := make(map[string]bool)
+	for _, f := range *files {
+		got[f.Name] = true
+		if f.Ext != strings.ToLower(f.Ext) || strings.HasPrefix(f.Ext, ".") {
+			t.Errorf("bad extension %q for %s", f.Ext, f.Name)
+		}
+		// Path must be the full absolute path.
+		if !filepath.IsAbs(f.Path) {
+			t.Errorf("path %q is not absolute", f.Path)
+		}
+	}
+	for _, want := range []string{"a.txt", "b.mp4", "c.pdf"} {
+		if !got[want] {
+			t.Errorf("file %q not found in walk result", want)
+		}
+	}
+	if got["d.mkv"] {
+		t.Error("skipped dir was walked anyway")
+	}
+}
+
 func TestScanDir(t *testing.T) {
 	dir := t.TempDir()
 

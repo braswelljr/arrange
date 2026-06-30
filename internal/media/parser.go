@@ -19,22 +19,29 @@ var (
 	// ── TV series ────────────────────────────────────────────────────────────
 
 	// S01E05, S01E05-E07, S01E05-07, S01E05E07  (most common scene format)
-	reSxxExx = regexp.MustCompile(`(?i)\bS(\d{1,2})\s*E(\d{2,3})(?:[-–]\s*E?(\d{2,3}))?\b`)
+	// Supports 1-3 digit season numbers (e.g. S013E17 zero-padded to 3 digits).
+	reSxxExx = regexp.MustCompile(`(?i)\bS(\d{1,3})\s*E(\d{2,3})(?:[-–]\s*E?(\d{2,3}))?\b`)
 
 	// S01 E05  (space between season and episode markers)
-	reSxxSpaceExx = regexp.MustCompile(`(?i)\bS(\d{1,2})\s+E(\d{2,3})\b`)
+	reSxxSpaceExx = regexp.MustCompile(`(?i)\bS(\d{1,3})\s+E(\d{2,3})\b`)
 
 	// 1x05, 2x12  (old-school NxNN)
 	reNxNN = regexp.MustCompile(`(?i)\b(\d{1,2})x(\d{2,3})\b`)
 
 	// Season 1 Episode 5  (fully written out, various separators)
-	reSeasonEp = regexp.MustCompile(`(?i)\bSeason[. _-]?(\d{1,2})[. _-]Episode[. _-]?(\d{1,3})\b`)
+	reSeasonEp = regexp.MustCompile(`(?i)\bSeason[. _-]?(\d{1,3})[. _-]Episode[. _-]?(\d{1,3})\b`)
 
 	// Season 1  (season number without episode — marks type as series)
-	reSeasonOnly = regexp.MustCompile(`(?i)\bSeason[. _-]?(\d{1,2})\b`)
+	reSeasonOnly = regexp.MustCompile(`(?i)\bSeason[. _-]?(\d{1,3})\b`)
+
+	// S01  (season shorthand without episode — season packs, e.g. "Show.S02.Complete")
+	reSxxOnly = regexp.MustCompile(`(?i)\bS(\d{1,3})\b`)
 
 	// Episode 05 / Ep 05 / Ep.5  (episode without season, e.g. mini-series)
 	reEpOnly = regexp.MustCompile(`(?i)\b(?:Ep(?:isode)?)[. _-]?(\d{2,3})\b`)
+
+	// E05  (bare episode marker without season — short-run or daily series)
+	reExxOnly = regexp.MustCompile(`(?i)\bE(\d{2,3})\b`)
 
 	// Anime dash  "Show Name - 05 [720p]" or "Show Name - 05v2"
 	// Only fires as a last resort when no other episode pattern matched.
@@ -68,11 +75,18 @@ var (
 			`WEBRip|WEB-DL|WEBDL|WEB|HDTV|PDTV|AMZN|HULU|DSNP|ATVP)\b`,
 	)
 
+	// HDR modifier — appended to the base quality tag when present.
+	// HDR10+ is listed first so the greedy match captures the '+'.
+	// The trailing anchor uses (?:$|\s|\b) instead of \b because '+' is a
+	// non-word character and \b cannot follow it.
+	reQualHDR = regexp.MustCompile(`(?i)\b(HDR10\+|HDR10|HDR|DV|Dolby[ .]?Vision)(?:$|\s|\b)`)
+
 	// Combined pattern used only for stripping quality tokens from titles.
 	reQuality = regexp.MustCompile(
 		`(?i)\b(4[Kk]|UHD|2160[pi]|1080[pi]|720[pi]|480[pi]|360[pi]|` +
 			`BluRay|Blu-Ray|BDRip|BRRip|DVDRip|DVDScr|` +
-			`WEBRip|WEB-DL|WEBDL|WEB|HDTV|PDTV|AMZN|HULU|DSNP|ATVP)\b`,
+			`WEBRip|WEB-DL|WEBDL|WEB|HDTV|PDTV|AMZN|HULU|DSNP|ATVP|` +
+			`HDR10\+?|HDR|DV|Dolby\.?Vision)\b`,
 	)
 
 	// ── Codec / release-group junk ────────────────────────────────────────────
@@ -112,6 +126,29 @@ var (
 	reIllegal = regexp.MustCompile(`[\\/:*?"<>|]`)
 )
 
+// ── Title-case tables ────────────────────────────────────────────────────────
+
+// knownUppercase maps lowercase tokens to their all-caps form so abbreviations
+// in titles are always rendered correctly (e.g. "Uk" → "UK").
+var knownUppercase = map[string]string{
+	"uk": "UK", "us": "US", "usa": "USA",
+	"bbc": "BBC", "nbc": "NBC", "cbs": "CBS", "abc": "ABC", "hbo": "HBO",
+	"cnn": "CNN", "mtv": "MTV", "pbs": "PBS",
+	"nyc": "NYC",
+	"fbi": "FBI", "cia": "CIA", "dea": "DEA", "nsa": "NSA",
+	"tv": "TV",
+	"dj": "DJ",
+}
+
+// smallWords are lowercased in the middle of a title (standard English title case).
+// They are still capitalised when they are the first word.
+var smallWords = map[string]bool{
+	"a": true, "an": true, "the": true,
+	"of": true, "in": true, "on": true, "at": true, "to": true,
+	"and": true, "but": true, "or": true, "nor": true,
+	"for": true, "with": true, "by": true, "as": true, "vs": true,
+}
+
 // ── Public API ───────────────────────────────────────────────────────────────
 
 // ParseName extracts MediaInfo from a bare filename (base name + extension).
@@ -139,9 +176,14 @@ func ParseName(filename string) *MediaInfo {
 
 	// ── Extract quality BEFORE stripping trailing noise ───────────────────────
 	// Trailing brackets like "[1080p x265]" are stripped next; capture quality
-	// now so it is not lost.  Resolution takes priority over source.
+	// now so it is not lost.  Resolution takes priority over source; HDR
+	// modifier is appended when present ("1080p HDR", "2160p HDR10+").
 	if ms := reQualRes.FindStringSubmatch(norm); len(ms) > 1 {
-		info.Quality = canonicalQuality(ms[1])
+		q := canonicalQuality(ms[1])
+		if mh := reQualHDR.FindStringSubmatch(norm); len(mh) > 1 {
+			q += " " + canonicalHDR(mh[1])
+		}
+		info.Quality = q
 	} else if ms := reQualSrc.FindStringSubmatch(norm); len(ms) > 1 {
 		info.Quality = canonicalQuality(ms[1])
 	}
@@ -194,9 +236,18 @@ func ParseName(filename string) *MediaInfo {
 		}
 	}
 
-	// Season 1  (series without an explicit episode)
+	// Season 1  (series without an explicit episode — written-out form)
 	if info.Type == TypeUnknown {
 		if m := reSeasonOnly.FindStringSubmatchIndex(norm); m != nil {
+			info.Type = TypeTVSeries
+			info.Season = mustAtoi(norm[m[2]:m[3]])
+			stopIdx = minOf(stopIdx, m[0])
+		}
+	}
+
+	// S01  (season shorthand, no episode — season packs like "Show.S02.Complete")
+	if info.Type == TypeUnknown {
+		if m := reSxxOnly.FindStringSubmatchIndex(norm); m != nil {
 			info.Type = TypeTVSeries
 			info.Season = mustAtoi(norm[m[2]:m[3]])
 			stopIdx = minOf(stopIdx, m[0])
@@ -206,6 +257,15 @@ func ParseName(filename string) *MediaInfo {
 	// Episode 05 / Ep 05
 	if info.Type == TypeUnknown {
 		if m := reEpOnly.FindStringSubmatchIndex(norm); m != nil {
+			info.Type = TypeTVSeries
+			info.Episode = mustAtoi(norm[m[2]:m[3]])
+			stopIdx = minOf(stopIdx, m[0])
+		}
+	}
+
+	// E05  (bare episode marker, no season — short-run or daily series)
+	if info.Type == TypeUnknown {
+		if m := reExxOnly.FindStringSubmatchIndex(norm); m != nil {
 			info.Type = TypeTVSeries
 			info.Episode = mustAtoi(norm[m[2]:m[3]])
 			stopIdx = minOf(stopIdx, m[0])
@@ -280,18 +340,28 @@ func normaliseSeparators(s string) string {
 	return strings.Join(strings.Fields(s), " ")
 }
 
-// cleanTitle strips noise tokens and title-cases each word.
+// cleanTitle strips noise tokens and applies English title case:
+//   - Known abbreviations (UK, US, FBI…) are always uppercased.
+//   - Articles and short prepositions (the, of, in…) are lowercased except
+//     when they are the first word of the title.
+//   - Everything else is capitalised on the first letter only.
 func cleanTitle(s string) string {
 	s = reJunk.ReplaceAllString(s, " ")
 	s = reQuality.ReplaceAllString(s, " ")
-	// Strip trailing punctuation / separators
 	s = strings.TrimRight(s, " -–—.,([{")
 	words := strings.Fields(s)
 	if len(words) == 0 {
 		return "Unknown"
 	}
 	for i, w := range words {
-		words[i] = capitaliseFirst(w)
+		lower := strings.ToLower(w)
+		if up, ok := knownUppercase[lower]; ok {
+			words[i] = up
+		} else if i > 0 && smallWords[lower] {
+			words[i] = lower
+		} else {
+			words[i] = capitaliseFirst(w)
+		}
 	}
 	return strings.Join(words, " ")
 }
@@ -343,6 +413,19 @@ func canonicalQuality(q string) string {
 		return "HDTV"
 	}
 	return q
+}
+
+func canonicalHDR(h string) string {
+	switch strings.ToLower(strings.NewReplacer(" ", ".", "-", ".").Replace(h)) {
+	case "dolby.vision", "dv":
+		return "DV"
+	case "hdr10+":
+		return "HDR10+"
+	case "hdr10":
+		return "HDR10"
+	default:
+		return "HDR"
+	}
 }
 
 func mustAtoi(s string) int {

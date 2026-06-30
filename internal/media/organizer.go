@@ -26,7 +26,7 @@ func Organise(
 	cfg *config.Config,
 	move func(src, dst string) error,
 ) ([]*Result, error) {
-	mediaExts := buildMediaSet(cfg)
+	media := buildMediaSet(cfg)
 	creators := cfg.MediaCreators
 
 	files, err := fileops.ScanDir(srcDir)
@@ -50,7 +50,7 @@ func Organise(
 
 		var destRelDir, destName string
 
-		if mediaExts[f.Ext] {
+		if media[f.Ext] {
 			parsed := ParseName(cleanStem + "." + f.Ext)
 			parsed.OrigPath = f.Path
 			creator := parsed.CreatorMatch(creators)
