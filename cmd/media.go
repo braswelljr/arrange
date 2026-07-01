@@ -11,7 +11,7 @@ import (
 func newMediaCmd(opts *CmdOptions) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "media <src> [dest]",
-		Short: "Organises media files into structured series / movie / audio folders",
+		Short: "Organizes media files into structured series / movie / audio folders",
 		Long: `Parses video filenames to detect TV series, movies, and multi-part movies,
 then arranges them into a tidy hierarchy:
 
@@ -46,13 +46,13 @@ func mediaRunE(opts *CmdOptions, src, dest string) error {
 		return err
 	}
 
-	results, err := media.Organise(src, dest, cfg, fileops.Move)
+	results, err := media.Organize(src, dest, cfg, fileops.Move)
 	if err != nil {
 		return err
 	}
 
 	if len(results) == 0 {
-		opts.Log.Info("no video files found")
+		opts.Log.Info("no media files found")
 		return nil
 	}
 

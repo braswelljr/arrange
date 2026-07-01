@@ -23,7 +23,7 @@ const (
 const defaultUnknownExtFolderName = FolderOther
 
 // defaultExcludedDirs is intentionally empty — files from Telegram, WhatsApp,
-// and other app folders are organised normally once they are complete.
+// and other app folders are organized normally once they are complete.
 // Populate this (or set excluded_dirs in config.json) only to permanently
 // block a specific folder.
 var defaultExcludedDirs = []string{}
@@ -32,8 +32,8 @@ var defaultExcludedDirs = []string{}
 // Rules:
 //   - ExemptFiles:true  →  file is NEVER moved (in-progress or source code)
 //   - First matching entry wins for a given extension
-//   - Torrent files and all in-progress download artefacts are exempt so the
-//     organiser never touches an unfinished download
+//   - Torrent files and all in-progress download artifacts are exempt so the
+//     organizer never touches an unfinished download
 var defaultKnownFiles = []FileExt{
 
 	// ── Pictures ────────────────────────────────────────────────────────────
@@ -251,7 +251,7 @@ var defaultKnownFiles = []FileExt{
 	},
 
 	// ── Torrent meta-files (exempt — never moved, never tracked) ─────────────
-	// The organiser has no role in torrent workflows.  .torrent and .magnet
+	// The organizer has no role in torrent workflows.  .torrent and .magnet
 	// files stay where they are; the completed download (video, audio, …) is
 	// handled by its own file-type rule above once it is fully written.
 	{

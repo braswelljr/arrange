@@ -3,6 +3,7 @@ package cmd
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -13,7 +14,7 @@ import (
 )
 
 // debounceDelay batches rapid bursts (archive extractions, multi-file copies)
-// into a single organise pass per source directory.
+// into a single organize pass per source directory.
 const debounceDelay = 800 * time.Millisecond
 
 func newWatchCmd(opts *CmdOptions) *cobra.Command {
@@ -21,8 +22,8 @@ func newWatchCmd(opts *CmdOptions) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "watch <directory>",
-		Short: "Watches a directory for new files and organises them automatically",
-		Long: `Watches a directory for newly created files and organises them according to
+		Short: "Watches a directory for new files and organizes them automatically",
+		Long: `Watches a directory for newly created files and organizes them according to
 your config.  Files that arrive via Telegram, WhatsApp, or any other app
 sub-folder are moved into the correct category folder under the root watched
 directory — e.g. a video dropped into ~/Downloads/Telegram Desktop/ is
@@ -89,7 +90,7 @@ func watchRun(opts *CmdOptions, dir string, recursive bool) error {
 		})
 	}
 
-	// scheduleRun debounces an organise pass.
+	// scheduleRun debounces an organize pass.
 	// srcDir is the directory where the event was observed; destDir is always
 	// the root watched directory so files from app sub-folders (Telegram,
 	// WhatsApp, …) are sorted into ~/Downloads/Videos/, ~/Downloads/Audio/,
@@ -100,6 +101,16 @@ func watchRun(opts *CmdOptions, dir string, recursive bool) error {
 	)
 
 	scheduleRun := func(srcDir string) {
+		// Don't re-organize files that have already landed in a destination
+		// folder — doing so would rename them with -v1, -v2, … suffixes.
+		rel, relErr := filepath.Rel(dir, srcDir)
+		if relErr == nil && rel != "." && !strings.HasPrefix(rel, "..") {
+			topDir := strings.ToLower(strings.SplitN(filepath.ToSlash(rel), "/", 2)[0])
+			if _, ok := cfg.DestFolders()[topDir]; ok {
+				return
+			}
+		}
+
 		timersMu.Lock()
 		defer timersMu.Unlock()
 		if t, ok := timers[srcDir]; ok {
@@ -107,7 +118,7 @@ func watchRun(opts *CmdOptions, dir string, recursive bool) error {
 		}
 		timers[srcDir] = time.AfterFunc(debounceDelay, func() {
 			if err := runE(opts, srcDir, dir, false); err != nil {
-				opts.Log.Errorf("organise %s → %s: %v", srcDir, dir, err)
+				opts.Log.Errorf("organize %s → %s: %v", srcDir, dir, err)
 			}
 			timersMu.Lock()
 			delete(timers, srcDir)
@@ -138,7 +149,7 @@ func watchRun(opts *CmdOptions, dir string, recursive bool) error {
 						}
 					}
 
-					// Schedule an organise pass sourced from the directory
+					// Schedule an organize pass sourced from the directory
 					// that contains the new file.
 					scheduleRun(filepath.Dir(event.Name))
 				}

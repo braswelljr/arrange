@@ -17,6 +17,7 @@ type SmartFile struct {
 // SmartFiles is a slice of SmartFile pointers with a convenience Len method.
 type SmartFiles []*SmartFile
 
+// Len returns the number of files in the slice.
 func (s *SmartFiles) Len() int { return len(*s) }
 
 // DirExists reports whether path exists and is a directory.

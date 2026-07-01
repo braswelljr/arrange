@@ -17,6 +17,11 @@ type Service struct {
 	daemon.Daemon
 }
 
+/**
+ * ServiceActionType identifies the daemon management operation to perform.
+ *
+ * Values: install | start | stop | status | remove
+ */
 type ServiceActionType int
 
 const (
@@ -29,6 +34,14 @@ const (
 
 var dependencies = []string{ /*"dummy.service"*/ }
 
+/**
+ * NewService creates a platform-appropriate daemon.Daemon instance.
+ *
+ * On Darwin it uses daemon.UserAgent; on all other platforms it uses
+ * daemon.SystemDaemon so the service runs under the system init manager.
+ *
+ * @returns  (*Service, nil) on success, or (nil, error) if daemon.New fails
+ */
 func NewService() (*Service, error) {
 	daemonKind := daemon.SystemDaemon
 	if runtime.GOOS == "darwin" {
@@ -42,6 +55,13 @@ func NewService() (*Service, error) {
 	return &Service{srv}, nil
 }
 
+/**
+ * Manage dispatches a daemon management action to the underlying daemon.Daemon.
+ *
+ * @param srvType  the action to perform (install, start, stop, status, remove)
+ * @param args     additional arguments forwarded to daemon.Install (only used for install)
+ * @returns        human-readable status message and any error encountered
+ */
 func (service *Service) Manage(srvType ServiceActionType, args ...string) (string, error) {
 	switch srvType {
 	case install:

@@ -97,7 +97,7 @@ var (
 			`x264|x265|h264|h265|H\.264|H\.265|HEVC|AVC|AVC1|VP8|VP9|AV1|` +
 			// audio codecs
 			`AAC|AC3|DTS(?:-HD)?|FLAC|DD5\.1|DD\+|TrueHD|Atmos|MP3|EAC3|` +
-			// HDR / colour
+			// HDR / color
 			`HDR10\+?|DV|Dolby\.?Vision|SDR|` +
 			// release modifiers
 			`REMUX|PROPER|REPACK|INTERNAL|READNFO|` +
@@ -152,7 +152,7 @@ var smallWords = map[string]bool{
 // ── Public API ───────────────────────────────────────────────────────────────
 
 // ParseName extracts MediaInfo from a bare filename (base name + extension).
-// It recognises every common naming convention used for scene, P2P, and
+// It recognizes every common naming convention used for scene, P2P, and
 // streaming releases, as well as anime and hand-named files.
 // OrigPath is left empty; set it yourself if you have the full path.
 func ParseName(filename string) *MediaInfo {

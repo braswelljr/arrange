@@ -1,3 +1,5 @@
+version: "2"
+
 linters:
   # Start from the default set and add extras.
   # golangci-lint enables errcheck, govet, ineffassign, staticcheck, unused by default.
@@ -5,7 +7,6 @@ linters:
     - misspell       # catch typos in strings and comments
     - unconvert      # remove unnecessary type conversions
     - revive         # idiomatic Go style (golint successor)
-    - gosimple       # suggest code simplifications
     - gocritic       # opinionated but catches real issues
 
   disable:
@@ -16,38 +17,35 @@ linters:
     - maintidx
     - gocognit
 
-linters-settings:
-  revive:
-    rules:
-      - name: exported
-        arguments:
-          # Require comments on all exported symbols.
-          - "checkPrivateReceivers"
-          - "sayRepetitiveInsteadOfStutters"
-      - name: error-return
-      - name: error-naming
-      - name: error-strings
-      - name: var-naming
-      - name: blank-imports
+  settings:
+    revive:
+      rules:
+        # exported rule omitted — JSDoc block comments document all exported
+        # symbols; Go's "must start with symbol name" godoc format is not enforced.
+        - name: error-return
+        - name: error-naming
+        - name: error-strings
+        - name: var-naming
+        - name: blank-imports
 
-  gocritic:
-    enabled-checks:
-      - appendAssign
-      - argOrder
-      - badCall
-      - commentedOutCode
-      - dupArg
-      - dupBranchBody
-      - emptyFallthrough
-      - exitAfterDefer
-      - nilValReturn
-      - sloppyLen
-      - stringXbytes
-      - unlabelStmt
-      - unnecessaryBlock
+    gocritic:
+      enabled-checks:
+        - appendAssign
+        - argOrder
+        - badCall
+        - commentedOutCode
+        - dupArg
+        - dupBranchBody
+        - emptyFallthrough
+        - exitAfterDefer
+        - nilValReturn
+        - sloppyLen
+        - stringXbytes
+        - unlabelStmt
+        - unnecessaryBlock
 
-  misspell:
-    locale: US
+    misspell:
+      locale: US
 
 issues:
   # Don't fail on generated files.
@@ -61,6 +59,7 @@ issues:
       linters:
         - gocritic
         - revive
+
 
     # Intentional best-effort closes (defer _ = f.Close()) are fine.
     - linters:

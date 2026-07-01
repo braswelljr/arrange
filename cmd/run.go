@@ -43,11 +43,21 @@ func newRunCmd(opts *CmdOptions) *cobra.Command {
 // the collision-suffix check.
 type dirLocker struct{ m sync.Map }
 
+/**
+ * Lock acquires the per-directory mutex, blocking until it is available.
+ *
+ * @param dir  absolute path of the destination directory to lock
+ */
 func (l *dirLocker) Lock(dir string) {
 	v, _ := l.m.LoadOrStore(dir, new(sync.Mutex))
 	v.(*sync.Mutex).Lock()
 }
 
+/**
+ * Unlock releases the per-directory mutex previously acquired by Lock.
+ *
+ * @param dir  absolute path of the destination directory to unlock
+ */
 func (l *dirLocker) Unlock(dir string) {
 	if v, ok := l.m.Load(dir); ok {
 		v.(*sync.Mutex).Unlock()
@@ -71,7 +81,7 @@ func runE(opts *CmdOptions, srcDir, destDir string, recursive bool, exclude ...s
 		destFolders := cfg.DestFolders()
 		files, err = fileops.WalkDir(srcDir, func(name string) bool {
 			lower := strings.ToLower(name)
-			// When organising in-place, skip already-organised category folders so
+			// When organizing in-place, skip already-organized category folders so
 			// files that are already where they belong are not re-processed.
 			if srcDir == destDir {
 				if _, ok := destFolders[lower]; ok {
@@ -172,6 +182,12 @@ func organiseFile(opts *CmdOptions, cfg *config.Config, locker *dirLocker, destR
 	}
 
 	stem := strings.TrimSuffix(destName, "."+f.Ext)
+
+	// Skip files already sitting in their correct destination — prevents
+	// rename loops in watch mode where the move itself triggers a new event.
+	if filepath.Clean(filepath.Dir(f.Path)) == filepath.Clean(fullDestDir) {
+		return nil
+	}
 
 	// Lock the destination directory so SafeDestPath + Move are atomic.
 	// Without this, two workers racing on the same dest dir could both see

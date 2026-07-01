@@ -9,6 +9,7 @@ import (
 // MediaType classifies the kind of media file.
 type MediaType uint8
 
+// Media type constants for classifying parsed files.
 const (
 	TypeUnknown   MediaType = iota
 	TypeTVSeries            // has season / episode markers
@@ -63,16 +64,17 @@ func (m *MediaInfo) DestName() string {
 	switch m.Type {
 	case TypeTVSeries:
 		name = m.Title
-		if m.Season > 0 && m.Episode > 0 {
+		switch {
+		case m.Season > 0 && m.Episode > 0:
 			ep := fmt.Sprintf("S%02dE%02d", m.Season, m.Episode)
 			if m.EpisodeEnd > 0 {
 				ep += fmt.Sprintf("-E%02d", m.EpisodeEnd)
 			}
 			name = fmt.Sprintf("%s %s", m.Title, ep)
-		} else if m.Season > 0 {
+		case m.Season > 0:
 			// Season pack: no episode info available.
 			name = fmt.Sprintf("%s S%02d", m.Title, m.Season)
-		} else if m.Episode > 0 {
+		case m.Episode > 0:
 			name = fmt.Sprintf("%s E%02d", m.Title, m.Episode)
 		}
 	default:

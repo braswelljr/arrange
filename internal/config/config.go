@@ -17,6 +17,16 @@ var (
 	cfgMu     sync.RWMutex
 )
 
+/**
+ * Config is the top-level configuration loaded from the user's JSON file.
+ *
+ * Fields:
+ *   - UnknownFilesFolder:  destination folder for unrecognized extensions (default: "Other")
+ *   - KnownFiles:          ordered list of extension → folder mappings
+ *   - ExcludedDirs:        directory names to never watch or organize
+ *   - MediaCreators:       creator names used for top-level grouping of media files
+ *   - Path:                absolute path of the loaded config file (set by NewConfig)
+ */
 type Config struct {
 	UnknownFilesFolder string    `json:"unknown_files_folder"`
 	KnownFiles         []FileExt `json:"known_files"`
@@ -31,12 +41,34 @@ type Config struct {
 	excludedDirs map[string]struct{}
 }
 
+/**
+ * FileExt maps a set of file extensions to a destination folder.
+ *
+ * Fields:
+ *   - Extensions:  list of lowercase extensions without a leading dot (e.g. "mp4", "mkv")
+ *   - Folder:      destination folder name relative to the watched root (e.g. "Videos")
+ *   - ExemptFiles: when true, matching files are never moved (used for in-progress downloads)
+ */
 type FileExt struct {
 	Extensions  []string `json:"extensions"`
 	Folder      string   `json:"folder"`
 	ExemptFiles bool     `json:"exempt_files"`
 }
 
+/**
+ * NewConfig loads (or creates) the config file at path and returns a parsed Config.
+ *
+ * If path is empty the platform-default config path is used (see config.Path()).
+ * If the file does not exist, a default config is written to disk before returning.
+ * Results are cached per path; the same *Config pointer is returned on subsequent calls.
+ *
+ * @param path  absolute path to the JSON config file, or "" for the platform default
+ * @returns     (*Config, nil) on success, or (nil, error) on I/O or parse failure
+ *
+ * Usage:
+ *   cfg, err := config.NewConfig("")          // use default path
+ *   cfg, err := config.NewConfig("/my/path")  // explicit path
+ */
 func NewConfig(path string) (*Config, error) {
 	if path == "" {
 		path = Path()
@@ -146,7 +178,7 @@ func (c *Config) ExtSet(folder string) map[string]bool {
 }
 
 // DestFolders returns the lowercased set of all unique destination folder names
-// used by non-exempt file groups.  Useful for skipping already-organised
+// used by non-exempt file groups.  Useful for skipping already-organized
 // subdirectories during a recursive scan.
 func (c *Config) DestFolders() map[string]struct{} {
 	c.initCfgMap()

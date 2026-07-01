@@ -10,6 +10,15 @@ import (
 	"github.com/braswelljr/arrange/internal/logger"
 )
 
+/**
+ * CmdOptions holds shared state passed to every subcommand.
+ *
+ * Fields:
+ *   - StdErr:      destination for error output (defaults to os.Stderr)
+ *   - StdOut:      destination for normal output (defaults to os.Stdout)
+ *   - ConfigPath:  path to the JSON config file; empty means use the platform default
+ *   - Log:         structured logger shared across all subcommands
+ */
 type CmdOptions struct {
 	StdErr *os.File
 	StdOut *os.File
@@ -18,6 +27,17 @@ type CmdOptions struct {
 	Log        *logger.Logger
 }
 
+/**
+ * NewRootCmd builds the top-level cobra command with all subcommands attached.
+ *
+ * @param opts  shared options (logger, config path, I/O streams) passed to every subcommand
+ * @returns     configured *cobra.Command ready to be executed via cmd.Execute()
+ *
+ * Usage:
+ *   opts := &CmdOptions{StdOut: os.Stdout, StdErr: os.Stderr, Log: logger.New(...)}
+ *   root := NewRootCmd(opts)
+ *   root.Execute()
+ */
 func NewRootCmd(opts *CmdOptions) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   common.AppName,

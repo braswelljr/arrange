@@ -1,6 +1,7 @@
 package fileops
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -29,7 +30,7 @@ func TestMove_MovesFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadFile dst: %v", err)
 	}
-	if string(got) != string(content) {
+	if !bytes.Equal(got, content) {
 		t.Errorf("dst content = %q, want %q", got, content)
 	}
 }
@@ -66,7 +67,7 @@ func TestMove_DestInDifferentDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadFile dst: %v", err)
 	}
-	if string(got) != string(content) {
+	if !bytes.Equal(got, content) {
 		t.Errorf("dst content = %q, want %q", got, content)
 	}
 }
@@ -93,7 +94,7 @@ func TestCopyThenRemove_Basic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadFile dst: %v", err)
 	}
-	if string(got) != string(content) {
+	if !bytes.Equal(got, content) {
 		t.Errorf("dst content = %q, want %q", got, content)
 	}
 }
