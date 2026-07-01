@@ -2,9 +2,9 @@ name: Test
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "staging"]
   pull_request:
-    branches: ["main"]
+    branches: ["main", "staging"]
 
 permissions:
   contents: read
@@ -35,9 +35,11 @@ jobs:
           cache: true
 
       - name: Vet
+        shell: bash
         run: go vet ./...
 
       - name: Test (race detector)
+        shell: bash
         run: go test -race -coverprofile=coverage.out -covermode=atomic ./...
 
       - name: Upload coverage report
