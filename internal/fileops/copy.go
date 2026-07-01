@@ -41,6 +41,12 @@ func copyThenRemove(src, dst string) error {
 		}
 	}
 
+	// Close src explicitly before removal — Windows cannot remove an open file.
+	// The deferred close is a harmless no-op after this.
+	if err := in.Close(); err != nil {
+		return fmt.Errorf("close source %s: %w", src, err)
+	}
+
 	if err := os.Remove(src); err != nil {
 		return fmt.Errorf("remove source %s: %w", src, err)
 	}

@@ -28,7 +28,8 @@ jobs:
           cache: true
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v8
         with:
           version: latest
+          install-mode: goinstall
           args: --timeout=5m
