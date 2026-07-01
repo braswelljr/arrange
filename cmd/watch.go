@@ -3,7 +3,6 @@ package cmd
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -101,16 +100,6 @@ func watchRun(opts *CmdOptions, dir string, recursive bool) error {
 	)
 
 	scheduleRun := func(srcDir string) {
-		// Don't re-organize files that have already landed in a destination
-		// folder — doing so would rename them with -v1, -v2, … suffixes.
-		rel, relErr := filepath.Rel(dir, srcDir)
-		if relErr == nil && rel != "." && !strings.HasPrefix(rel, "..") {
-			topDir := strings.ToLower(strings.SplitN(filepath.ToSlash(rel), "/", 2)[0])
-			if _, ok := cfg.DestFolders()[topDir]; ok {
-				return
-			}
-		}
-
 		timersMu.Lock()
 		defer timersMu.Unlock()
 		if t, ok := timers[srcDir]; ok {
