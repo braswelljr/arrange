@@ -16,20 +16,16 @@ all: build/all
 
 # ── Build ─────────────────────────────────────────────────────────────────────
 
-.PHONY: build/darwin
-build/darwin:
+.PHONY: build
+build:
 	go build $(LDFLAGS) -o $(BIN_DIR)/$(BINARY) .
 
 .PHONY: build/windows
 build/windows:
 	GOOS=windows GOARCH=amd64 go build $(LDFLAGS) -o $(BIN_DIR)/$(BINARY).exe .
 
-.PHONY: build/linux
-build/linux:
-	GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o $(BIN_DIR)/$(BINARY)-linux .
-
 .PHONY: build/all
-build/all: build/darwin build/windows build/linux
+build/all: build build/windows
 
 .PHONY: install
 install:
