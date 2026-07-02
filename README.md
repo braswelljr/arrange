@@ -1,5 +1,10 @@
 # arrange
 
+[![Test](https://github.com/braswelljr/arrange/actions/workflows/test.yml/badge.svg)](https://github.com/braswelljr/arrange/actions/workflows/test.yml)
+[![Build](https://github.com/braswelljr/arrange/actions/workflows/build.yml/badge.svg)](https://github.com/braswelljr/arrange/actions/workflows/build.yml)
+[![Lint](https://github.com/braswelljr/arrange/actions/workflows/lint.yml/badge.svg)](https://github.com/braswelljr/arrange/actions/workflows/lint.yml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/braswelljr/arrange.svg)](https://pkg.go.dev/github.com/braswelljr/arrange)
+
 > Automatically organize files into folders by file type - run once, watch forever, or let a background service handle it.
 
 `arrange` scans a directory and moves files into categorized subfolders (Pictures, Videos, Documents, Audio, etc.) based on their extensions. For video and audio it goes further: it parses filenames to detect TV series, movies, and multi-part films and builds a clean folder hierarchy automatically.
@@ -175,8 +180,10 @@ Both `"Tyler Perry's …"` and `"Tyler Perrys …"` (common in dot-separated fil
 When the same show ships under different names (`Zatima`, `Tyler Perry's Zatima`), map them to one canonical title in your config. Matching ignores case, apostrophes, and spacing, so a single entry covers every spelling variant:
 
 ```json
-"title_aliases": {
-  "Tyler Perrys Zatima": "Zatima"
+{
+    "title_aliases": {
+        "Tyler Perrys Zatima": "Zatima"
+    }
 }
 ```
 
@@ -354,11 +361,11 @@ recorded with the SCM — don't move `arrange.exe` after installing.
 
 The config file is created automatically on first run at:
 
-| Platform      | Default path                                                   |
-| ------------- | -------------------------------------------------------------- |
+| Platform      | Default path                                                  |
+|---------------|---------------------------------------------------------------|
 | macOS / Linux | `~/.config/arrange/config.json` (respects `$XDG_CONFIG_HOME`) |
-| Windows       | `%APPDATA%\arrange\config.json`                                |
-| Custom        | Pass `--config-path <path>` to any command                     |
+| Windows       | `%APPDATA%\arrange\config.json`                               |
+| Custom        | Pass `--config-path <path>` to any command                    |
 
 Full schema:
 
