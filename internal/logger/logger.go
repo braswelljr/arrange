@@ -29,6 +29,7 @@ var (
 	errorLabel   = color.New(color.FgRed, color.Bold).Sprint("ERR  ")
 	eventLabel   = color.New(color.FgMagenta, color.Bold).Sprint("EVENT")
 	moveLabel    = color.New(color.FgBlue, color.Bold).Sprint("MOVE ")
+	planLabel    = color.New(color.FgYellow, color.Bold).Sprint("PLAN ")
 
 	dimStyle     = color.New(color.Faint)
 	boldStyle    = color.New(color.Bold)
@@ -150,6 +151,21 @@ func (l *Logger) Move(src, destination string) {
 	arrow := arrowStyle.Sprint("→")
 	msg := fmt.Sprintf("%s %s %s", dimPath.Sprint(srcTrim), arrow, successStyle.Sprint(destinationTrim))
 	l.line(l.out, moveLabel, msg)
+}
+
+// Plan logs a move that would happen in dry-run mode: src → destination, using
+// the same layout as Move but a distinct yellow "PLAN" label so previews are
+// never mistaken for real moves.
+func (l *Logger) Plan(src, destination string) {
+	available := TermWidth() - prefixLen - 3 // 3 for " → "
+	half := available / 2
+
+	srcTrim := truncate(src, half)
+	destinationTrim := truncate(destination, half)
+
+	arrow := arrowStyle.Sprint("→")
+	msg := fmt.Sprintf("%s %s %s", dimPath.Sprint(srcTrim), arrow, color.New(color.FgYellow).Sprint(destinationTrim))
+	l.line(l.out, planLabel, msg)
 }
 
 // Separator prints a full-width horizontal rule to stdout.

@@ -4,12 +4,15 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"runtime"
 
 	"github.com/spf13/cobra"
 	"github.com/takama/daemon"
 
 	"github.com/braswelljr/arrange/internal/common"
+	"github.com/braswelljr/arrange/internal/fileops"
 )
 
 // Service is the daemon service struct
@@ -87,19 +90,35 @@ func newServiceCmd(opts *CmdOptions) *cobra.Command {
 	}
 
 	installCmd := &cobra.Command{
-		Use:   "install <dir>", // TODO: get dir from config
-		Short: "Install the service",
+		Use:   "install <dir>",
+		Short: "Install the service to watch <dir> and organize files at login/boot",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// Resolve to an absolute path so the installed unit does not depend
+			// on the working directory it happens to be launched from.
+			watchDir, err := filepath.Abs(args[0])
+			if err != nil {
+				return fmt.Errorf("resolve watch directory: %w", err)
+			}
+			if !fileops.DirExists(watchDir) {
+				return fmt.Errorf("watch directory does not exist: %s", watchDir)
+			}
+
+			// On Linux the service is a system daemon and installing it needs
+			// root; warn early rather than failing deep inside the daemon lib.
+			if runtime.GOOS == "linux" && os.Geteuid() != 0 {
+				opts.Log.Warn("installing a systemd service usually requires root — re-run with sudo if this fails")
+			}
+
 			service, err := NewService()
 			if err != nil {
 				return err
 			}
 
-			if err := runE(opts, args[0], args[0], false); err != nil {
+			if err := runE(opts, watchDir, watchDir, false, false, false); err != nil {
 				return err
 			}
-			status, err := service.Manage(install, "watch", args[0])
+			status, err := service.Manage(install, "watch", watchDir)
 
 			if err != nil {
 				return err

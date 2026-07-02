@@ -12,9 +12,10 @@ import (
 )
 
 var (
-	cfg       *Config
-	pathCache string
-	cfgMu     sync.RWMutex
+	cfg        *Config
+	pathCache  string
+	cacheMtime int64 // last-seen config mtime (unix nanos); triggers a reload when it changes
+	cfgMu      sync.RWMutex
 )
 
 /**
@@ -28,10 +29,11 @@ var (
  *   - Path:                absolute path of the loaded config file (set by NewConfig)
  */
 type Config struct {
-	UnknownFilesFolder string    `json:"unknown_files_folder"`
-	KnownFiles         []FileExt `json:"known_files"`
-	ExcludedDirs       []string  `json:"excluded_dirs"`
-	MediaCreators      []string  `json:"media_creators"`
+	UnknownFilesFolder string            `json:"unknown_files_folder"`
+	KnownFiles         []FileExt         `json:"known_files"`
+	ExcludedDirs       []string          `json:"excluded_dirs"`
+	MediaCreators      []string          `json:"media_creators"`
+	TitleAliases       map[string]string `json:"title_aliases"`
 
 	Path string
 
@@ -39,6 +41,7 @@ type Config struct {
 	exemptedExts map[string]string
 	includedExts map[string]string
 	excludedDirs map[string]struct{}
+	titleAliases map[string]string // normalised key → canonical title
 }
 
 /**
@@ -74,8 +77,12 @@ func NewConfig(path string) (*Config, error) {
 		path = Path()
 	}
 
+	// Serve from cache only when the path matches AND the file has not changed
+	// on disk since we last read it. This lets a long-running `watch`/`service`
+	// process pick up edits to config.json without a restart.
+	diskMtime := configMtime(path)
 	cfgMu.RLock()
-	if cfg != nil && path == pathCache {
+	if cfg != nil && path == pathCache && diskMtime == cacheMtime {
 		c := cfg
 		cfgMu.RUnlock()
 		return c, nil
@@ -93,6 +100,7 @@ func NewConfig(path string) (*Config, error) {
 			KnownFiles:         defaultKnownFiles,
 			ExcludedDirs:       defaultExcludedDirs,
 			MediaCreators:      []string{},
+			TitleAliases:       map[string]string{},
 		}
 		data, err := json.MarshalIndent(defaultCfg, "", "\t")
 		if err != nil {
@@ -123,9 +131,21 @@ func NewConfig(path string) (*Config, error) {
 	cfgMu.Lock()
 	cfg = newCfg
 	pathCache = path
+	cacheMtime = configMtime(path)
 	cfgMu.Unlock()
 
 	return newCfg, nil
+}
+
+// configMtime returns the modification time of path in unix nanoseconds, or 0
+// if the file cannot be stat'd. A zero result is treated as "unknown" and
+// forces a reload on the next call.
+func configMtime(path string) int64 {
+	info, err := os.Stat(path)
+	if err != nil {
+		return 0
+	}
+	return info.ModTime().UnixNano()
 }
 
 func (c *Config) initCfgMap() {
@@ -138,9 +158,16 @@ func (c *Config) initCfgMap() {
 			c.excludedDirs[strings.ToLower(dir)] = struct{}{}
 		}
 
+		c.titleAliases = make(map[string]string, len(c.TitleAliases))
+		for alias, canonical := range c.TitleAliases {
+			c.titleAliases[normalizeTitleKey(alias)] = canonical
+		}
+
 		for _, file := range c.KnownFiles {
 			for _, extension := range file.Extensions {
-				extension = strings.TrimLeft(extension, ".")
+				// Lowercase to match ScanDir/WalkDir, which always lowercase the
+				// extension — otherwise entries like "Z" or "DS_Store" never match.
+				extension = strings.ToLower(strings.TrimLeft(extension, "."))
 				if file.ExemptFiles {
 					c.exemptedExts[extension] = file.Folder
 					continue
@@ -192,6 +219,26 @@ func (c *Config) DestFolders() map[string]struct{} {
 		out[strings.ToLower(c.UnknownFilesFolder)] = struct{}{}
 	}
 	return out
+}
+
+// CanonicalTitle maps a parsed media title through the user's title_aliases so
+// that different spellings of the same show ("Zatima", "Tyler Perry's Zatima")
+// collapse into one folder. Matching ignores case, apostrophes, and extra
+// whitespace. Titles with no alias are returned unchanged.
+func (c *Config) CanonicalTitle(title string) string {
+	c.initCfgMap()
+	if canonical, ok := c.titleAliases[normalizeTitleKey(title)]; ok {
+		return canonical
+	}
+	return title
+}
+
+// normalizeTitleKey builds the apostrophe- and case-insensitive lookup key used
+// to match title_aliases entries.
+func normalizeTitleKey(s string) string {
+	s = strings.ToLower(s)
+	s = strings.NewReplacer("'", "", "’", "", "‘", "").Replace(s)
+	return strings.Join(strings.Fields(s), " ")
 }
 
 // Get returns the destination folder and whether the extension is exempt.

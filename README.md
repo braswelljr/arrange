@@ -4,7 +4,7 @@
 
 `arrange` scans a directory and moves files into categorized subfolders (Pictures, Videos, Documents, Audio, etc.) based on their extensions. For video and audio it goes further: it parses filenames to detect TV series, movies, and multi-part films and builds a clean folder hierarchy automatically.
 
-It can run as a one-shot command, react to new files in real-time via a filesystem watcher, or run as a persistent background service (macOS LaunchAgent / Linux systemd).
+It can run as a one-shot command, react to new files in real-time via a filesystem watcher, or run as a persistent background service (macOS LaunchAgent / Linux systemd / Windows service).
 
 ---
 
@@ -100,16 +100,20 @@ arrange run <src> [dest]
 
 **Flags**
 
-| Flag          | Short | Description                                       |
-|---------------|-------|---------------------------------------------------|
-| `--exclude`   | `-c`  | Comma-separated list of filenames to skip         |
-| `--recursive` | `-r`  | Recursively scan all subdirectories               |
+| Flag                | Short | Description                                                        |
+|---------------------|-------|--------------------------------------------------------------------|
+| `--exclude`         | `-c`  | Comma-separated list of filenames to skip                          |
+| `--recursive`       | `-r`  | Recursively scan all subdirectories                                |
+| `--dry-run`         | `-n`  | Preview every move (and duplicate removal) without touching files  |
+| `--keep-duplicates` | `-k`  | Keep byte-identical duplicates as `-vN` copies instead of removing |
 
 **Behaviour notes**
 
 - Video and audio files are organised into a clean hierarchy automatically — no flat `Videos/` dump. TV series go to `Videos/<Title>/Season XX/<Title> SxxExx [quality].ext`; movies go to `Videos/<Title> (YYYY)/<Title> (YYYY) [quality].ext`.
+- **Subtitles travel with their video.** A `.srt`/`.ass`/`.sub` beside a video (`Movie.2020.en.srt` next to `Movie.2020.mkv`) is moved into the same folder and renamed to match the video, preserving its language/flag tag: `Movie (2020).en.srt`. Subtitles with no matching video go to `Subtitles/`.
 - Browser-generated duplicate suffixes (`file (1).pdf`, `file (2).pdf`) are stripped before moving — the destination is always `file.pdf`.
-- If the destination filename already exists, a versioned suffix is appended: `file-v1.pdf`, `file-v2.pdf`, and so on.
+- **Duplicate handling:** if the destination already holds a **byte-identical** file, the source is removed as a redundant copy (use `--keep-duplicates` to version it as `-vN` instead). If a same-named file has **different** content, a versioned suffix is always appended (`file-v1.pdf`) so nothing is overwritten.
+- Symlinks and hidden dotfiles (`.DS_Store`, `.localized`) are never moved.
 - In-progress downloads (`.crdownload`, `.part`, `.aria2`, `.!qb`, etc.) are never touched.
 - Torrent meta-files (`.torrent`) are never moved.
 - `--recursive` walks all subdirectories and organises every file found, skipping already-organised category folders (`Videos/`, `Documents/`, etc.) when the destination is the same as the source.
@@ -164,7 +168,19 @@ result:  Tyler Perry/
            Madea Goes to Jail (2009)/...
 ```
 
-Both `"Tyler Perry's …"` and `"Tyler Perrys …"` (common in dot-separated filenames) are matched automatically.
+Both `"Tyler Perry's …"` and `"Tyler Perrys …"` (common in dot-separated filenames) are matched automatically. Curly apostrophes (`’`) are normalised to straight ones, so `Tyler.Perry’s.Zatima` and `Tyler.Perrys.Zatima` never split into separate folders.
+
+**Title aliases**
+
+When the same show ships under different names (`Zatima`, `Tyler Perry's Zatima`), map them to one canonical title in your config. Matching ignores case, apostrophes, and spacing, so a single entry covers every spelling variant:
+
+```json
+"title_aliases": {
+  "Tyler Perrys Zatima": "Zatima"
+}
+```
+
+Result: `Zatima.*`, `Tyler.Perrys.Zatima.*`, and `Tyler.Perry’s.Zatima.*` all land in one `Videos/Zatima/Season XX/` tree.
 
 **Examples**
 
@@ -207,7 +223,7 @@ The process runs in the foreground. Use [`service`](#service) to run it persiste
 
 ### `service`
 
-Manages `arrange` as a background service (macOS LaunchAgent or Linux systemd user unit).
+Manages `arrange` as a background service (macOS LaunchAgent, Linux systemd user unit, or Windows service).
 
 ```bash
 arrange service <command>
@@ -311,16 +327,26 @@ systemctl --user status arrange
 
 ---
 
-### Windows (Task Scheduler)
+### Windows (Service Control Manager)
 
-`arrange service` is not available on Windows. Use Task Scheduler instead:
+`arrange service` registers a native Windows service through the SCM. Run the
+commands from an **elevated** (Administrator) prompt:
 
-1. Open Task Scheduler (`Win+R` → `taskschd.msc`)
-2. **Create Basic Task** → trigger **"When I log on"**
-3. Action → **Start a Program**
-   - Program: `C:\path\to\arrange.exe`
-   - Arguments: `watch C:\Users\<you>\Downloads`
-4. Finish — arrange starts automatically on login.
+```powershell
+arrange service install C:\Users\<you>\Downloads   # register, auto-start at boot
+arrange service start
+arrange service status
+arrange service stop
+arrange service uninstall
+```
+
+The service watches the given directory (recursively) and organizes files into
+category folders under it, exactly like `arrange watch`. The executable path is
+recorded with the SCM — don't move `arrange.exe` after installing.
+
+> Prefer no elevation? You can still run it at login via Task Scheduler:
+> **Create Basic Task** → trigger **"When I log on"** → **Start a Program**
+> `arrange.exe`, arguments `watch C:\Users\<you>\Downloads`.
 
 ---
 

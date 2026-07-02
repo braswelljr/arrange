@@ -13,6 +13,7 @@ type parseWant struct {
 	year       int
 	quality    string
 	part       int
+	date       string
 }
 
 var parseCases = []struct {
@@ -148,6 +149,55 @@ var parseCases = []struct {
 		input: "The.Batman.2022.2160p.DV.WEB-DL.mkv",
 		want:  parseWant{title: "The Batman", typ: TypeMovie, year: 2022, quality: "2160p DV"},
 	},
+	// ── Resolution WxH must not be read as a release year ──────────────────────
+	{
+		name:  "WIDTHxHEIGHT resolution captured, not treated as year",
+		input: "Interstellar.2014.1920x1080.BluRay.mkv",
+		want:  parseWant{title: "Interstellar", typ: TypeMovie, year: 2014, quality: "1080p"},
+	},
+	{
+		name:  "WIDTHxHEIGHT only, no explicit resolution tag",
+		input: "Some.Movie.1280x720.mkv",
+		want:  parseWant{title: "Some Movie", typ: TypeMovie, quality: "720p"},
+	},
+	// ── Multi-episode join without a dash ──────────────────────────────────────
+	{
+		name:  "multi-episode S01E01E02 bare join",
+		input: "Show.S01E01E02.1080p.mkv",
+		want:  parseWant{title: "Show", typ: TypeTVSeries, season: 1, episode: 1, episodeEnd: 2, quality: "1080p"},
+	},
+	{
+		name:  "multi-episode S01E01-02 dash without E",
+		input: "Show.S01E01-02.mkv",
+		want:  parseWant{title: "Show", typ: TypeTVSeries, season: 1, episode: 1, episodeEnd: 2},
+	},
+	// ── Date-based (daily) episodes ─────────────────────────────────────────────
+	{
+		name:  "date-based daily episode dotted",
+		input: "The.Daily.Show.2023.09.15.720p.WEB.mkv",
+		want:  parseWant{title: "The Daily Show", typ: TypeTVSeries, quality: "720p", date: "2023-09-15"},
+	},
+	{
+		name:  "date-based daily episode hyphenated",
+		input: "Jimmy Kimmel Live 2022-01-31.mp4",
+		want:  parseWant{title: "Jimmy Kimmel Live", typ: TypeTVSeries, date: "2022-01-31"},
+	},
+	{
+		name:  "invalid date falls back to movie year",
+		input: "Movie.2020.13.45.mkv",
+		want:  parseWant{title: "Movie", typ: TypeMovie, year: 2020},
+	},
+	// ── Apostrophe normalisation ────────────────────────────────────────────────
+	{
+		name:  "curly apostrophe folded to straight",
+		input: "Tyler.Perry’s.Zatima.S03E05.mkv",
+		want:  parseWant{title: "Tyler Perry's Zatima", typ: TypeTVSeries, season: 3, episode: 5},
+	},
+	{
+		name:  "straight apostrophe unchanged",
+		input: "Tyler.Perry's.Zatima.S03E06.mkv",
+		want:  parseWant{title: "Tyler Perry's Zatima", typ: TypeTVSeries, season: 3, episode: 6},
+	},
 }
 
 func TestParseName(t *testing.T) {
@@ -168,6 +218,7 @@ func TestParseName(t *testing.T) {
 			check("Year", got.Year, c.want.year)
 			check("Quality", got.Quality, c.want.quality)
 			check("Part", got.Part, c.want.part)
+			check("Date", got.Date, c.want.date)
 		})
 	}
 }

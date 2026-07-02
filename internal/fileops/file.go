@@ -8,10 +8,11 @@ import (
 
 // SmartFile is a lightweight descriptor for a single file entry.
 type SmartFile struct {
-	Name string
-	Path string
-	Ext  string // lowercase, no leading dot
-	Size int64
+	Name    string
+	Path    string
+	Ext     string // lowercase, no leading dot
+	Size    int64
+	Symlink bool // true when the entry is a symbolic link (never followed)
 }
 
 // SmartFiles is a slice of SmartFile pointers with a convenience Len method.
@@ -57,10 +58,11 @@ func ScanDir(dir string) (*SmartFiles, error) {
 		}
 		name := e.Name()
 		files = append(files, &SmartFile{
-			Name: name,
-			Path: filepath.Join(dir, name),
-			Ext:  strings.ToLower(strings.TrimLeft(filepath.Ext(name), ".")),
-			Size: info.Size(),
+			Name:    name,
+			Path:    filepath.Join(dir, name),
+			Ext:     strings.ToLower(strings.TrimLeft(filepath.Ext(name), ".")),
+			Size:    info.Size(),
+			Symlink: e.Type()&os.ModeSymlink != 0,
 		})
 	}
 	return &files, nil
@@ -91,10 +93,11 @@ func WalkDir(root string, skipDir func(name string) bool) (*SmartFiles, error) {
 		}
 		name := d.Name()
 		files = append(files, &SmartFile{
-			Name: name,
-			Path: path,
-			Ext:  strings.ToLower(strings.TrimLeft(filepath.Ext(name), ".")),
-			Size: info.Size(),
+			Name:    name,
+			Path:    path,
+			Ext:     strings.ToLower(strings.TrimLeft(filepath.Ext(name), ".")),
+			Size:    info.Size(),
+			Symlink: d.Type()&os.ModeSymlink != 0,
 		})
 		return nil
 	})

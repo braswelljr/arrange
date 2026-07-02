@@ -1,6 +1,7 @@
 package fileops
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -23,15 +24,24 @@ func copyThenRemove(src, dst string) error {
 	}
 
 	if _, err := io.Copy(out, in); err != nil {
-		// Close and remove the partial destination before returning the copy error.
-		_ = out.Close()
-		_ = os.Remove(dst)
-		return fmt.Errorf("copy %s to %s: %w", src, dst, err)
+		// Close and remove the partial destination before returning. Join any
+		// cleanup failure so the original copy error is never silently lost.
+		cerr := fmt.Errorf("copy %s to %s: %w", src, dst, err)
+		if closeErr := out.Close(); closeErr != nil {
+			cerr = errors.Join(cerr, fmt.Errorf("close partial destination %s: %w", dst, closeErr))
+		}
+		if rmErr := os.Remove(dst); rmErr != nil {
+			cerr = errors.Join(cerr, fmt.Errorf("remove partial destination %s: %w", dst, rmErr))
+		}
+		return cerr
 	}
 
 	if err := out.Close(); err != nil {
-		_ = os.Remove(dst)
-		return fmt.Errorf("close destination %s: %w", dst, err)
+		rerr := fmt.Errorf("close destination %s: %w", dst, err)
+		if rmErr := os.Remove(dst); rmErr != nil {
+			rerr = errors.Join(rerr, fmt.Errorf("remove destination %s: %w", dst, rmErr))
+		}
+		return rerr
 	}
 
 	// Preserve source permissions where the OS supports it.
@@ -47,8 +57,23 @@ func copyThenRemove(src, dst string) error {
 		return fmt.Errorf("close source %s: %w", src, err)
 	}
 
-	if err := os.Remove(src); err != nil {
+	if err := removeSource(src); err != nil {
 		return fmt.Errorf("remove source %s: %w", src, err)
 	}
 	return nil
+}
+
+// removeSource deletes src, retrying once after restoring write permission when
+// the first attempt is refused (a read-only source file on Unix, or the
+// read-only attribute on Windows).
+func removeSource(src string) error {
+	err := os.Remove(src)
+	if err == nil || !errors.Is(err, os.ErrPermission) {
+		return err
+	}
+	// Best-effort: make the file writable, then try once more.
+	if chmodErr := os.Chmod(src, 0o600); chmodErr != nil {
+		return err // return the original removal error, not the chmod error
+	}
+	return os.Remove(src)
 }

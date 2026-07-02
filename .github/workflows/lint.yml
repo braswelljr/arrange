@@ -30,6 +30,7 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v8
         with:
-          version: latest
-          install-mode: goinstall
+          # Pin to a known-good v2 release so a newer 'latest' can't tighten the
+          # config schema and fail `config verify` out from under us.
+          version: v2.12.2
           args: --timeout=5m

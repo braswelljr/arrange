@@ -9,6 +9,9 @@ import (
 )
 
 func newMediaCmd(opts *CmdOptions) *cobra.Command {
+	var dryRun bool
+	var keepDuplicates bool
+
 	cmd := &cobra.Command{
 		Use:   "media <src> [dest]",
 		Short: "Organizes media files into structured series / movie / audio folders",
@@ -34,19 +37,23 @@ their films will be placed under a shared top-level folder, e.g.
 			if len(args) == 2 {
 				dest = args[1]
 			}
-			return mediaRunE(opts, src, dest)
+			return mediaRunE(opts, src, dest, dryRun, keepDuplicates)
 		},
 	}
+
+	cmd.Flags().BoolVarP(&dryRun, "dry-run", "n", false, "Preview the moves without touching any files")
+	cmd.Flags().BoolVarP(&keepDuplicates, "keep-duplicates", "k", false, "Keep byte-identical duplicates as -vN copies instead of removing them")
+
 	return cmd
 }
 
-func mediaRunE(opts *CmdOptions, src, dest string) error {
+func mediaRunE(opts *CmdOptions, src, dest string, dryRun, keepDuplicates bool) error {
 	cfg, err := config.NewConfig(opts.ConfigPath)
 	if err != nil {
 		return err
 	}
 
-	results, err := media.Organize(src, dest, cfg, fileops.Move)
+	results, err := media.Organize(src, dest, cfg, fileops.Move, dryRun, keepDuplicates)
 	if err != nil {
 		return err
 	}
@@ -57,11 +64,20 @@ func mediaRunE(opts *CmdOptions, src, dest string) error {
 	}
 
 	for _, r := range results {
-		if r.Skipped {
+		switch {
+		case r.Duplicate:
+			verb := "removed"
+			if dryRun {
+				verb = "would remove"
+			}
+			opts.Log.Warnf("duplicate of %s — %s %s", r.DestPath, verb, r.Info.OrigPath)
+		case r.Skipped:
 			opts.Log.Warnf("skipped %s: %s", r.Info.OrigPath, r.Reason)
-			continue
+		case dryRun:
+			opts.Log.Plan(r.Info.OrigPath, r.DestPath)
+		default:
+			opts.Log.Move(r.Info.OrigPath, r.DestPath)
 		}
-		opts.Log.Move(r.Info.OrigPath, r.DestPath)
 	}
 
 	return nil
