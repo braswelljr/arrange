@@ -4,7 +4,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newSetupCmd(opts *CmdOptions) *cobra.Command {
+func newSetupCmd(_ *CmdOptions) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "setup",
 		Short: "Create arrange config file",

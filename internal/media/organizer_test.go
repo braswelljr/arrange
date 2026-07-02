@@ -56,7 +56,7 @@ func TestOrganise(t *testing.T) {
 	}
 
 	cfg := testConfig(t)
-	results, err := Organize(srcDir, destDir, cfg, mockMove)
+	results, err := Organize(srcDir, destDir, cfg, mockMove, false, false)
 	if err != nil {
 		t.Fatalf("Organize: %v", err)
 	}
@@ -102,7 +102,7 @@ func TestOrganiseEmptyDir(t *testing.T) {
 	results, err := Organize(t.TempDir(), t.TempDir(), cfg, func(_, _ string) error {
 		t.Error("move called on empty dir")
 		return nil
-	})
+	}, false, false)
 	if err != nil {
 		t.Fatalf("Organize: %v", err)
 	}
@@ -131,7 +131,7 @@ func TestOrganizeOnlyMediaFiles(t *testing.T) {
 	results, err := Organize(srcDir, destDir, cfg, func(src, _ string) error {
 		moved = append(moved, filepath.Base(src))
 		return nil
-	})
+	}, false, false)
 	if err != nil {
 		t.Fatalf("Organize: %v", err)
 	}
@@ -163,7 +163,7 @@ func TestOrganizeResultInfo(t *testing.T) {
 	}
 
 	cfg := testConfig(t)
-	results, err := Organize(srcDir, destDir, cfg, func(_, _ string) error { return nil })
+	results, err := Organize(srcDir, destDir, cfg, func(_, _ string) error { return nil }, false, false)
 	if err != nil {
 		t.Fatalf("Organize: %v", err)
 	}
@@ -208,7 +208,7 @@ func TestOrganiseCreatorGrouping(t *testing.T) {
 	_, err := Organize(srcDir, destDir, cfg, func(_, d string) error {
 		dst = d
 		return nil
-	})
+	}, false, false)
 	if err != nil {
 		t.Fatalf("Organize: %v", err)
 	}

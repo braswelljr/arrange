@@ -1,6 +1,7 @@
 package media
 
 import (
+	"fmt"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -20,7 +21,9 @@ var (
 
 	// S01E05, S01E05-E07, S01E05-07, S01E05E07  (most common scene format)
 	// Supports 1-3 digit season numbers (e.g. S013E17 zero-padded to 3 digits).
-	reSxxExx = regexp.MustCompile(`(?i)\bS(\d{1,3})\s*E(\d{2,3})(?:[-–]\s*E?(\d{2,3}))?\b`)
+	// The optional trailing group captures the end of a multi-episode range
+	// written with a dash ("-E07", "-07") or a bare joiner ("E07").
+	reSxxExx = regexp.MustCompile(`(?i)\bS(\d{1,3})\s*E(\d{2,3})(?:[-–E]\s*E?(\d{2,3}))?\b`)
 
 	// S01 E05  (space between season and episode markers)
 	reSxxSpaceExx = regexp.MustCompile(`(?i)\bS(\d{1,3})\s+E(\d{2,3})\b`)
@@ -55,9 +58,22 @@ var (
 	// CD1, CD2, Disc 1, Disk 2, Volume 3, Vol.4
 	reCDDisc = regexp.MustCompile(`(?i)\b(?:CD|Disc|Disk|Volume|Vol)[. _-]?(\d+)\b`)
 
+	// ── Date-based (daily) episodes ────────────────────────────────────────────
+	// "Show 2023 09 15", "Show 2023-09-15" — talk shows and news programs are
+	// named by air date rather than SxxExx. Detected before the movie-year rule
+	// so the leading year is not mistaken for a release year.
+	reDate = regexp.MustCompile(`\b((?:19|20)\d{2})[ .\-](\d{2})[ .\-](\d{2})\b`)
+
+	// ── Resolution as WIDTHxHEIGHT ──────────────────────────────────────────────
+	// "1920x1080", "1280x720" — captured as a quality fallback and stripped so
+	// the leading number ("1920") is never mistaken for a release year.
+	reResDim = regexp.MustCompile(`\b(\d{3,4})[xX](\d{3,4})\b`)
+
 	// ── Movie year ───────────────────────────────────────────────────────────
 
-	// (2008) or 2008 — parentheses accepted
+	// (2008) or 2008 — parentheses accepted. The surrounding character class
+	// prevents a year glued to another number/letter (e.g. the "1920" in a
+	// stray resolution) from matching once real resolutions have been stripped.
 	reYear = regexp.MustCompile(`[\(\[]?((?:19|20)\d{2})[\)\]]?`)
 
 	// ── Quality tags ─────────────────────────────────────────────────────────
@@ -178,15 +194,33 @@ func ParseName(filename string) *MediaInfo {
 	// Trailing brackets like "[1080p x265]" are stripped next; capture quality
 	// now so it is not lost.  Resolution takes priority over source; HDR
 	// modifier is appended when present ("1080p HDR", "2160p HDR10+").
-	if ms := reQualRes.FindStringSubmatch(norm); len(ms) > 1 {
+	// Resolution is preferred over a source tag. Try an explicit resolution
+	// ("1080p"), then a WIDTHxHEIGHT dimension ("1920x1080"), and only then fall
+	// back to a source tag ("BluRay"). The HDR modifier is appended to whichever
+	// resolution wins.
+	switch {
+	case reQualRes.MatchString(norm):
+		ms := reQualRes.FindStringSubmatch(norm)
 		q := canonicalQuality(ms[1])
 		if mh := reQualHDR.FindStringSubmatch(norm); len(mh) > 1 {
 			q += " " + canonicalHDR(mh[1])
 		}
 		info.Quality = q
-	} else if ms := reQualSrc.FindStringSubmatch(norm); len(ms) > 1 {
+	case reResDim.MatchString(norm):
+		md := reResDim.FindStringSubmatch(norm)
+		q := heightToRes(md[2])
+		if mh := reQualHDR.FindStringSubmatch(norm); len(mh) > 1 {
+			q += " " + canonicalHDR(mh[1])
+		}
+		info.Quality = q
+	case reQualSrc.MatchString(norm):
+		ms := reQualSrc.FindStringSubmatch(norm)
 		info.Quality = canonicalQuality(ms[1])
 	}
+
+	// Always strip a WIDTHxHEIGHT token so its leading number ("1920") is never
+	// mistaken for a release year further down.
+	norm = strings.TrimSpace(reResDim.ReplaceAllString(norm, " "))
 
 	// Strip trailing noise brackets like "[1080p x265]" at the very end.
 	norm = strings.TrimSpace(reTrailNoise.ReplaceAllString(norm, ""))
@@ -290,14 +324,31 @@ func ParseName(filename string) *MediaInfo {
 		}
 	}
 
-	// ── Year (valid for all types) ─────────────────────────────────────────────
-	// Find the FIRST year occurrence — it marks the end of the title.
-	if m := reYear.FindStringSubmatchIndex(norm); m != nil {
-		info.Year = mustAtoi(norm[m[2]:m[3]])
-		if info.Type == TypeUnknown {
-			info.Type = TypeMovie
+	// ── Date-based daily episode (before the movie-year rule) ──────────────────
+	// A leading air date ("2023 09 15") identifies a daily/talk show; capture it
+	// so the year is not misread as a movie release year.
+	if info.Type == TypeUnknown {
+		if m := reDate.FindStringSubmatchIndex(norm); m != nil {
+			y, mo, d := mustAtoi(norm[m[2]:m[3]]), mustAtoi(norm[m[4]:m[5]]), mustAtoi(norm[m[6]:m[7]])
+			if validDate(mo, d) {
+				info.Type = TypeTVSeries
+				info.Date = fmt.Sprintf("%04d-%02d-%02d", y, mo, d)
+				stopIdx = minOf(stopIdx, m[0])
+			}
 		}
-		stopIdx = minOf(stopIdx, m[0])
+	}
+
+	// ── Year (valid for all types) ─────────────────────────────────────────────
+	// Find the FIRST year occurrence — it marks the end of the title. Skipped
+	// for date-based episodes, whose leading year is part of the air date.
+	if info.Date == "" {
+		if m := reYear.FindStringSubmatchIndex(norm); m != nil {
+			info.Year = mustAtoi(norm[m[2]:m[3]])
+			if info.Type == TypeUnknown {
+				info.Type = TypeMovie
+			}
+			stopIdx = minOf(stopIdx, m[0])
+		}
 	}
 
 	// ── Anime dash fallback ───────────────────────────────────────────────────
@@ -330,9 +381,16 @@ func Parse(path string) *MediaInfo {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-// normaliseSeparators replaces dots or underscores with spaces when they
-// act as word separators (dots outnumber spaces).
+// curlyToStraight folds the Unicode curly apostrophes/quotes that appear in
+// filenames into a straight ASCII apostrophe so that "Tyler Perry’s" and
+// "Tyler Perry's" resolve to the same title (and folder) instead of two.
+var curlyToStraight = strings.NewReplacer("’", "'", "‘", "'", "＇", "'")
+
+// normaliseSeparators folds curly apostrophes to straight ones and replaces
+// dots or underscores with spaces when they act as word separators (dots
+// outnumber spaces).
 func normaliseSeparators(s string) string {
+	s = curlyToStraight.Replace(s)
 	if strings.Count(s, ".") > strings.Count(s, " ") {
 		s = strings.ReplaceAll(s, ".", " ")
 	}
@@ -426,6 +484,32 @@ func canonicalHDR(h string) string {
 	default:
 		return "HDR"
 	}
+}
+
+// heightToRes maps the height of a WIDTHxHEIGHT resolution to a canonical
+// progressive-scan quality tag ("1080" → "1080p").
+func heightToRes(h string) string {
+	switch h {
+	case "2160":
+		return "2160p"
+	case "1080":
+		return "1080p"
+	case "720":
+		return "720p"
+	case "576":
+		return "576p"
+	case "480":
+		return "480p"
+	case "360":
+		return "360p"
+	}
+	return h + "p"
+}
+
+// validDate reports whether a month/day pair is within calendar range. The year
+// is already constrained to 19xx/20xx by the pattern, so it is not re-checked.
+func validDate(month, day int) bool {
+	return month >= 1 && month <= 12 && day >= 1 && day <= 31
 }
 
 func mustAtoi(s string) int {

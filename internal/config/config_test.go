@@ -14,6 +14,31 @@ func newTestConfig(t *testing.T) *Config {
 	return cfg
 }
 
+// ── CanonicalTitle ─────────────────────────────────────────────────────────────
+
+func TestCanonicalTitle(t *testing.T) {
+	cfg := newTestConfig(t)
+	cfg.TitleAliases = map[string]string{
+		"Tyler Perry's Zatima": "Zatima",
+		"Zatima":               "Zatima",
+	}
+
+	cases := []struct {
+		in, want string
+	}{
+		{"Tyler Perry's Zatima", "Zatima"}, // exact
+		{"tyler perrys zatima", "Zatima"},  // case + apostrophe insensitive
+		{"Tyler Perry’s Zatima", "Zatima"}, // curly apostrophe in the lookup
+		{"Zatima", "Zatima"},               // identity alias
+		{"The Chi", "The Chi"},             // no alias — unchanged
+	}
+	for _, c := range cases {
+		if got := cfg.CanonicalTitle(c.in); got != c.want {
+			t.Errorf("CanonicalTitle(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
 // ── Get ───────────────────────────────────────────────────────────────────────
 
 func TestGetKnownExtension(t *testing.T) {

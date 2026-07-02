@@ -26,6 +26,7 @@ type MediaInfo struct {
 	Episode    int    // 0 if not a series
 	EpisodeEnd int    // >0 for multi-episode files, e.g. S01E01-E03
 	Part       int    // >0 for multi-part movies
+	Date       string // "YYYY-MM-DD" for date-based (daily) episodes, else ""
 	Quality    string // "1080p", "720p", "BluRay", …
 	OrigPath   string // absolute original file path
 	Ext        string // lower-cased extension without leading dot
@@ -65,6 +66,9 @@ func (m *MediaInfo) DestName() string {
 	case TypeTVSeries:
 		name = m.Title
 		switch {
+		case m.Date != "":
+			// Date-based daily episode: "<Title> YYYY-MM-DD".
+			name = fmt.Sprintf("%s %s", m.Title, m.Date)
 		case m.Season > 0 && m.Episode > 0:
 			ep := fmt.Sprintf("S%02dE%02d", m.Season, m.Episode)
 			if m.EpisodeEnd > 0 {

@@ -37,7 +37,7 @@ func writeFile(t *testing.T, path string) {
 func TestRunE_EmptyDir(t *testing.T) {
 	opts := testOpts(t)
 	src := t.TempDir()
-	if err := runE(opts, src, src, false); err != nil {
+	if err := runE(opts, src, src, false, false, false); err != nil {
 		t.Fatalf("runE on empty dir: %v", err)
 	}
 }
@@ -52,7 +52,7 @@ func TestRunE_OrganizesFiles(t *testing.T) {
 	writeFile(t, filepath.Join(src, "photo.jpg"))
 	writeFile(t, filepath.Join(src, "notes.txt"))
 
-	if err := runE(opts, src, dest, false); err != nil {
+	if err := runE(opts, src, dest, false, false, false); err != nil {
 		t.Fatalf("runE: %v", err)
 	}
 
@@ -78,7 +78,7 @@ func TestRunE_VideoHierarchy(t *testing.T) {
 	// Standard SxxExx name — parser should resolve title / season / episode / quality.
 	writeFile(t, filepath.Join(src, "The.Office.S01E05.720p.mkv"))
 
-	if err := runE(opts, src, dest, false); err != nil {
+	if err := runE(opts, src, dest, false, false, false); err != nil {
 		t.Fatalf("runE: %v", err)
 	}
 
@@ -109,7 +109,7 @@ func TestRunE_SkipsExemptFiles(t *testing.T) {
 		writeFile(t, filepath.Join(src, name))
 	}
 
-	if err := runE(opts, src, dest, false); err != nil {
+	if err := runE(opts, src, dest, false, false, false); err != nil {
 		t.Fatalf("runE: %v", err)
 	}
 
@@ -130,7 +130,7 @@ func TestRunE_ExcludeFlag(t *testing.T) {
 	writeFile(t, filepath.Join(src, "keep.pdf"))
 	writeFile(t, filepath.Join(src, "skip.pdf"))
 
-	if err := runE(opts, src, dest, false, "skip.pdf"); err != nil {
+	if err := runE(opts, src, dest, false, false, false, "skip.pdf"); err != nil {
 		t.Fatalf("runE: %v", err)
 	}
 
@@ -153,7 +153,7 @@ func TestRunE_Recursive(t *testing.T) {
 	writeFile(t, filepath.Join(src, "top.pdf"))
 	writeFile(t, filepath.Join(src, "subdir", "nested.jpg"))
 
-	if err := runE(opts, src, dest, true); err != nil {
+	if err := runE(opts, src, dest, true, false, false); err != nil {
 		t.Fatalf("runE recursive: %v", err)
 	}
 
@@ -176,7 +176,7 @@ func TestRunE_ZeroByteSkipped(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := runE(opts, src, dest, false); err != nil {
+	if err := runE(opts, src, dest, false, false, false); err != nil {
 		t.Fatalf("runE: %v", err)
 	}
 
@@ -286,6 +286,167 @@ func TestOrganiseFile_Document(t *testing.T) {
 
 	if _, err := os.Stat(filepath.Join(dest, config.FolderDocuments, "report.pdf")); err != nil {
 		t.Errorf("report.pdf not at expected dest: %v", err)
+	}
+}
+
+// TestRunE_SubtitleFollowsVideo verifies that a subtitle sitting beside a video
+// is moved into the same destination folder and renamed to match the video,
+// preserving its language tag.
+func TestRunE_SubtitleFollowsVideo(t *testing.T) {
+	opts := testOpts(t)
+	src := t.TempDir()
+	dest := t.TempDir()
+
+	writeFile(t, filepath.Join(src, "The.Office.S01E05.720p.mkv"))
+	writeFile(t, filepath.Join(src, "The.Office.S01E05.720p.en.srt"))
+	writeFile(t, filepath.Join(src, "The.Office.S01E05.720p.srt")) // no language tag
+
+	if err := runE(opts, src, dest, false, false, false); err != nil {
+		t.Fatalf("runE: %v", err)
+	}
+
+	seasonDir := filepath.Join(dest, config.FolderVideos, "The Office", "Season 01")
+	want := []string{
+		"The Office S01E05 [720p].mkv",
+		"The Office S01E05 [720p].en.srt",
+		"The Office S01E05 [720p].srt",
+	}
+	for _, name := range want {
+		if _, err := os.Stat(filepath.Join(seasonDir, name)); err != nil {
+			t.Errorf("expected %s beside the video: %v", name, err)
+		}
+	}
+
+	// The subtitle must NOT have been routed to the standalone Subtitles folder.
+	if _, err := os.Stat(filepath.Join(dest, config.FolderSubtitles)); err == nil {
+		t.Error("subtitle was routed to Subtitles/ instead of following its video")
+	}
+}
+
+// TestRunE_OrphanSubtitle verifies that a subtitle with no matching video is
+// organized on its own into the Subtitles folder.
+func TestRunE_OrphanSubtitle(t *testing.T) {
+	opts := testOpts(t)
+	src := t.TempDir()
+	dest := t.TempDir()
+
+	writeFile(t, filepath.Join(src, "loose.srt"))
+
+	if err := runE(opts, src, dest, false, false, false); err != nil {
+		t.Fatalf("runE: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(dest, config.FolderSubtitles, "loose.srt")); err != nil {
+		t.Errorf("orphan subtitle not organized into Subtitles/: %v", err)
+	}
+}
+
+// TestRunE_DryRunMovesNothing verifies that --dry-run leaves every file in place.
+func TestRunE_DryRunMovesNothing(t *testing.T) {
+	opts := testOpts(t)
+	src := t.TempDir()
+	dest := t.TempDir()
+
+	writeFile(t, filepath.Join(src, "report.pdf"))
+
+	if err := runE(opts, src, dest, false, true, false); err != nil {
+		t.Fatalf("runE dry-run: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(src, "report.pdf")); err != nil {
+		t.Error("dry-run moved report.pdf out of src")
+	}
+	if _, err := os.Stat(filepath.Join(dest, config.FolderDocuments, "report.pdf")); err == nil {
+		t.Error("dry-run created a file in dest")
+	}
+}
+
+// TestRunE_DuplicateRemoved verifies that a byte-identical file whose copy is
+// already organized is removed from the source instead of creating a -vN copy.
+func TestRunE_DuplicateRemoved(t *testing.T) {
+	opts := testOpts(t)
+	src := t.TempDir()
+	dest := t.TempDir()
+
+	// Pre-existing organized copy.
+	organized := filepath.Join(dest, config.FolderDocuments, "report.pdf")
+	if err := os.MkdirAll(filepath.Dir(organized), 0750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(organized, []byte("identical"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	// Same-content file waiting in src.
+	dup := filepath.Join(src, "report.pdf")
+	if err := os.WriteFile(dup, []byte("identical"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := runE(opts, src, dest, false, false, false); err != nil {
+		t.Fatalf("runE: %v", err)
+	}
+
+	// Source duplicate must be gone, and no -v1 copy created.
+	if _, err := os.Stat(dup); !os.IsNotExist(err) {
+		t.Error("duplicate source was not removed")
+	}
+	if _, err := os.Stat(filepath.Join(dest, config.FolderDocuments, "report-v1.pdf")); err == nil {
+		t.Error("a -v1 copy was created for an identical duplicate")
+	}
+}
+
+// TestRunE_KeepDuplicates verifies that --keep-duplicates versions an identical
+// file as -v1 instead of removing it.
+func TestRunE_KeepDuplicates(t *testing.T) {
+	opts := testOpts(t)
+	src := t.TempDir()
+	dest := t.TempDir()
+
+	organized := filepath.Join(dest, config.FolderDocuments, "report.pdf")
+	if err := os.MkdirAll(filepath.Dir(organized), 0750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(organized, []byte("identical"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	dup := filepath.Join(src, "report.pdf")
+	if err := os.WriteFile(dup, []byte("identical"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := runE(opts, src, dest, false, false, true); err != nil {
+		t.Fatalf("runE: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(dest, config.FolderDocuments, "report-v1.pdf")); err != nil {
+		t.Errorf("--keep-duplicates did not create a -v1 copy: %v", err)
+	}
+}
+
+// TestRunE_DifferentContentVersions verifies that a same-named but different
+// file is versioned (not removed) so no data is lost.
+func TestRunE_DifferentContentVersions(t *testing.T) {
+	opts := testOpts(t)
+	src := t.TempDir()
+	dest := t.TempDir()
+
+	organized := filepath.Join(dest, config.FolderDocuments, "report.pdf")
+	if err := os.MkdirAll(filepath.Dir(organized), 0750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(organized, []byte("ORIGINAL"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "report.pdf"), []byte("DIFFERENT"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := runE(opts, src, dest, false, false, false); err != nil {
+		t.Fatalf("runE: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(dest, config.FolderDocuments, "report-v1.pdf")); err != nil {
+		t.Errorf("different-content file was not versioned as -v1: %v", err)
 	}
 }
 

@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"sync"
@@ -16,8 +17,14 @@ import (
 // into a single organize pass per source directory.
 const debounceDelay = 800 * time.Millisecond
 
+// watchWarnThreshold is the number of directories past which we warn the user
+// that OS watch-descriptor limits may cause silently-missed events.
+const watchWarnThreshold = 2000
+
 func newWatchCmd(opts *CmdOptions) *cobra.Command {
 	var recursive bool
+	var dryRun bool
+	var keepDuplicates bool
 
 	cmd := &cobra.Command{
 		Use:   "watch <directory>",
@@ -31,19 +38,22 @@ moved to ~/Downloads/Videos/.
 In-progress downloads (crdownload, part, aria2, …) are never touched.
 
 Use --recursive / -r to also watch all subdirectories.  Directories listed
-in excluded_dirs in your config are skipped from automatic watching.`,
+in excluded_dirs in your config are skipped from automatic watching.
+Use --dry-run / -n to log what would be organized without moving anything.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return watchRun(opts, args[0], recursive)
+			return watchRun(cmd.Context(), opts, args[0], recursive, dryRun, keepDuplicates)
 		},
 	}
 
 	cmd.Flags().BoolVarP(&recursive, "recursive", "r", false, "Recursively watch subdirectories")
+	cmd.Flags().BoolVarP(&dryRun, "dry-run", "n", false, "Log what would be organized without moving anything")
+	cmd.Flags().BoolVarP(&keepDuplicates, "keep-duplicates", "k", false, "Keep byte-identical duplicates as -vN copies instead of removing them")
 
 	return cmd
 }
 
-func watchRun(opts *CmdOptions, dir string, recursive bool) error {
+func watchRun(ctx context.Context, opts *CmdOptions, dir string, recursive, dryRun, keepDuplicates bool) error {
 	cfg, err := config.NewConfig(opts.ConfigPath)
 	if err != nil {
 		return err
@@ -60,6 +70,7 @@ func watchRun(opts *CmdOptions, dir string, recursive bool) error {
 	}()
 
 	var watcherMu sync.Mutex
+	var watched int
 
 	// addDir registers path with the watcher unless the user has explicitly
 	// listed it in excluded_dirs.
@@ -73,6 +84,10 @@ func watchRun(opts *CmdOptions, dir string, recursive bool) error {
 		if err := watcher.Add(path); err != nil {
 			opts.Log.Errorf("watch %s: %v", path, err)
 			return
+		}
+		watched++
+		if watched == watchWarnThreshold {
+			opts.Log.Warnf("watching %d directories — OS watch limits may cause some new files to be missed; consider narrowing the watched tree or adding excluded_dirs", watched)
 		}
 		opts.Log.Infof("watching %s", path)
 	}
@@ -99,6 +114,17 @@ func watchRun(opts *CmdOptions, dir string, recursive bool) error {
 		timers   = make(map[string]*time.Timer)
 	)
 
+	// Stop any pending debounce timers when the watch loop exits so they cannot
+	// fire — and organize files — after the command has returned.
+	defer func() {
+		timersMu.Lock()
+		for _, t := range timers {
+			t.Stop()
+		}
+		clear(timers)
+		timersMu.Unlock()
+	}()
+
 	scheduleRun := func(srcDir string) {
 		timersMu.Lock()
 		defer timersMu.Unlock()
@@ -106,7 +132,7 @@ func watchRun(opts *CmdOptions, dir string, recursive bool) error {
 			t.Stop()
 		}
 		timers[srcDir] = time.AfterFunc(debounceDelay, func() {
-			if err := runE(opts, srcDir, dir, false); err != nil {
+			if err := runE(opts, srcDir, dir, false, dryRun, keepDuplicates); err != nil {
 				opts.Log.Errorf("organize %s → %s: %v", srcDir, dir, err)
 			}
 			timersMu.Lock()
@@ -120,6 +146,13 @@ func watchRun(opts *CmdOptions, dir string, recursive bool) error {
 	go func() {
 		for {
 			select {
+			case <-ctx.Done():
+				// Service stop / shutdown (or a canceled parent context):
+				// exit the loop; the deferred watcher.Close and timer cleanup
+				// run as watchRun returns.
+				errc <- nil
+				return
+
 			case event, ok := <-watcher.Events:
 				if !ok {
 					errc <- nil
